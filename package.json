@@ -1,0 +1,27 @@
+{
+  "name": "argon",
+  "version": "0.0.1",
+  "description": "DCM Reporting to BigQuery connector",
+  "main": "app.js",
+  "engines": {
+    "node": ">=10"
+  },
+  "scripts": {
+    "start": "app.js",
+    "start-dev": "nodemon app.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Google Inc.",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@google-cloud/bigquery": "^2.0.6",
+    "google-auth-library": "^3.0.1",
+    "hapi": "^18.0.0",
+    "luxon": "^1.10.0"
+  },
+  "devDependencies": {
+    "eslint": "^5.12.1",
+    "eslint-config-google": "^0.11.0",
+    "nodemon": "^1.18.9"
+  }
+}
