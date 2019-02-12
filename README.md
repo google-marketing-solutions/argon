@@ -1,11 +1,11 @@
 # argon
 
+***This is not an officially supported Google product.***
+
 This middleware allows Campaign Manager reports to be ingested into BigQuery
-datasets. This project can be deployed on AppEngine, and handles its own
+datasets. It can be deployed on AppEngine, and handles its own
 authentication and cleanup. Jobs are triggered by issuing POST calls, which
 allows for use with Cloud Scheduler.
-
-***This is not an officially supported Google product***
 
 ## Usage
 
@@ -25,8 +25,8 @@ allows for use with Cloud Scheduler.
 ## Development
 
 ```
-export GOOGLE_CLOUD_PROJECT='[PROJECT_ID]'
+export GOOGLE_CLOUD_PROJECT="[PROJECT_ID]"
 export GOOGLE_APPLICATION_CREDENTIALS="[PATH_TO_KEYFILE]"
 npm install
-npm start-dev
+npm run start-dev
 ```
