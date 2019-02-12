@@ -298,35 +298,32 @@ async function main(req, h) {
     info('Ingesting reports.');
     for (const [fileId, data] of Object.entries(reportFiles)) {
       info(`Fetching report file ${fileId} for ${data.dateRange.endDate}.`);
-      const fileUrl = data.urls.apiUrl;
-      const {data: file} = await dcm.request({url: fileUrl});
-      if (!file) {
-        error(`${fileId}: Report file is unavailable.`);
-        continue;
-      }
-
-      const fieldsResult = FIELDS_PATTERN.exec(file);
-      if (!fieldsResult) {
-        error(`${fileId}: Fieldnames not found.`);
-        continue;
-      }
-
-      const endingResult = ENDING_PATTERN.exec(file);
-      if (!endingResult) {
-        error(`${fileId}: File ending not found.`);
-        continue;
-      }
-
-      const content = file.slice(
-          fieldsResult.index + fieldsResult[0].length, // end of fields line
-          endingResult.index + 1 // beginning of ending line
-      );
-      const csv = new Readable();
-      csv.push(content);
-      csv.push(null);
-
-      info('Uploading data to BQ table.');
       try {
+        const fileUrl = data.urls.apiUrl;
+        const {data: file} = await dcm.request({url: fileUrl});
+        if (!file) {
+          throw Error('Report file is unavailable.');
+        }
+
+        const fieldsResult = FIELDS_PATTERN.exec(file);
+        if (!fieldsResult) {
+          throw Error('Fieldnames not found.');
+        }
+
+        const endingResult = ENDING_PATTERN.exec(file);
+        if (!endingResult) {
+          throw Error('File ending not found.');
+        }
+
+        const content = file.slice(
+            fieldsResult.index + fieldsResult[0].length, // end of fields line
+            endingResult.index + 1 // beginning of ending line
+        );
+        const csv = new Readable();
+        csv.push(content);
+        csv.push(null);
+
+        info('Uploading data to BQ table.');
         await new Promise((_resolve, _reject) => (
           csv.pipe(table.createWriteStream())
               .on('error', _reject)
