@@ -32,8 +32,8 @@ const DATE_FIELD = 'date';
 
 const IAM_PAUSE_MS = 1000;
 
-const REPORTING_BASE_URL = `https://www.googleapis.com/dfareporting/v3.2`;
-const REPORTING_SCOPE = ['https://www.googleapis.com/auth/dfareporting'];
+const REPORTING_BASE_URL = 'https://www.googleapis.com/dfareporting/v3.3';
+const REPORTING_SCOPES = ['https://www.googleapis.com/auth/dfareporting'];
 
 const DFA_NAME_PATTERN = /^dfa:(?<name>.*)/;
 const REPORT_AVAIL_PATTERN = /REPORT_AVAILABLE/;
@@ -188,7 +188,7 @@ async function main(req, h) {
 
     info('Initializing the DCM client.');
     const auth = new GoogleAuth();
-    const dcm = await auth.getClient({scopes: REPORTING_SCOPE, credentials});
+    const dcm = await auth.getClient({scopes: REPORTING_SCOPES, credentials});
 
     info(`Checking for existence of Report ${reportId}`);
     const {data: checkData} = await dcm.request({url: reportUrl});
