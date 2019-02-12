@@ -239,7 +239,7 @@ async function main(req, h) {
     info('Checking ingested dates.');
     const [rows] = await bq.query(`
       SELECT DISTINCT ${DATE_FIELD}
-      FROM \`${projectId}:${datasetId}.${tableName}\`
+      FROM \`${projectId}.${datasetId}.${tableName}\`
       ORDER BY ${DATE_FIELD} DESC
       LIMIT ${LOOKBACK_DAYS}
     `);
