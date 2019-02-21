@@ -69,10 +69,20 @@ async function success(h, msg) {
 }
 
 /**
+ * Converts a string to a valid BQ table name.
+ *
+ * @param {string} name Raw name
+ * @return {string} Validated name
+ */
+function getTableName(name) {
+  return name.replace(/[^a-zA-Z0-9]/g, '_');
+}
+
+/**
  * Extracts valid fieldnames for dimensions & metrics from their DFA API names.
  *
- * @param {object} data DFA API response for the report
- * @return {array} camelCased fieldnames
+ * @param {!object} data DFA API response for the report
+ * @return {!array} Camel-Cased fieldnames
  */
 function getFieldnames(data) {
   const criteriaType = data.type
@@ -90,8 +100,8 @@ function getFieldnames(data) {
 /**
  * Constructs fields from names with associated datatypes.
  *
- * @param {array!} names Fieldnames
- * @return {array!} Fields with types
+ * @param {!array} names Fieldnames
+ * @return {!array} Fields with types
  */
 function getFields(names) {
   const fields = names.map((name) => {
@@ -107,8 +117,8 @@ function getFields(names) {
 /**
  * Compares BigQuery schema for matching field names and types.
  *
- * @param {object!} actual Schema to compare against
- * @param {object!} test Schema to check validity of
+ * @param {!object} actual Schema to compare against
+ * @param {!object} test Schema to check validity of
  * @return {boolean} Whether schema matches
  */
 function compareSchema(actual, test) {
@@ -128,7 +138,7 @@ function compareSchema(actual, test) {
 /**
  * Generates lookback dates relative to the provided one.
  *
- * @param {DateTime!} fromDate Starting date for lookback
+ * @param {!DateTime} fromDate Starting date for lookback
  * @param {number} numDays Number of days to lookback
  * @param {string=} dateFormat Format string for date
  * @return {array!} Lookback date strings
@@ -214,7 +224,7 @@ async function main(req, h) {
       throw Error('Dataset not found.');
     }
 
-    const tableName = `${reportName}`;
+    const tableName = getTableName(reportName);
     info(`Checking for existence of Table ${tableName}`);
     const table = dataset.table(tableName);
     const [tableExists] = await table.exists();
