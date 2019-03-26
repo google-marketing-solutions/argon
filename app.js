@@ -141,7 +141,7 @@ function compareSchema(actual, test) {
  * @param {!DateTime} fromDate Starting date for lookback
  * @param {number} numDays Number of days to lookback
  * @param {string=} dateFormat Format string for date
- * @return {array!} Lookback date strings
+ * @return {!array} Lookback date strings
  */
 function getLookbackDates(fromDate, numDays, dateFormat = DATE_FORMAT) {
   const lookbackDates = {};
@@ -150,6 +150,20 @@ function getLookbackDates(fromDate, numDays, dateFormat = DATE_FORMAT) {
     lookbackDates[date] = null;
   }
   return lookbackDates;
+}
+
+/**
+ * Decodes a potentially base64 encoded payload
+ *
+ * @param {!object} payload Unknown payload
+ * @return {!object} JSON payload
+ */
+function decodePayload(payload) {
+  if (Buffer.isBuffer(payload)) {
+    return JSON.parse(Buffer.from(payload, 'base64').toString());
+  } else {
+    return payload;
+  }
 }
 
 
@@ -169,16 +183,18 @@ async function main(req, h) {
       throw Error('Provide Google Cloud Project ID');
     }
 
-    if (!req.payload) {
+    const payload = decodePayload(req.payload);
+
+    if (!payload) {
       throw Error('Provide DCM Profile ID and Account Email ID.');
     }
 
-    const profileId = req.payload.profileId;
+    const profileId = payload.profileId;
     if (!profileId) {
       throw Error('Provide DCM Profile ID');
     }
 
-    emailId = req.payload.emailId;
+    emailId = payload.emailId;
     if (!emailId) {
       throw Error('Provide Account Email ID');
     }
