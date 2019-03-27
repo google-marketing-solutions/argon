@@ -51,21 +51,21 @@ function log(thing) {
 }
 
 function info(msg) {
-  console.log(`INFO: ${msg}`);
+  log(`Info: ${msg}`);
 }
 
 function error(err) {
-  console.error(`ERROR: ${err.message || err}`);
+  log(`${err.stack || err}`);
 }
 
 async function failure(h, err) {
   error(err);
-  return h.response({message: 'failure'}).code(500);
+  return h.response({success: false, message: err.toString()}).code(500);
 }
 
 async function success(h, msg) {
   info(msg);
-  return h.response({message: 'success'}).code(200);
+  return h.response({success: true, message: msg}).code(200);
 }
 
 /**
@@ -90,7 +90,7 @@ function getFieldnames(data) {
       .replace( /_(.)/g, (c) => c.toUpperCase())
       .replace(/_/g, '');
   const criteria = data[`${criteriaType}Criteria`] || data.criteria;
-  const dimensions = criteria.dimensions.map((dimension) => (dimension.name));
+  const dimensions = criteria.dimensions.map((dimension) => dimension.name);
   const metrics = criteria.metricNames;
   const dfaNames = dimensions.concat(metrics);
   const names = dfaNames.map((name) => DFA_NAME_PATTERN.exec(name).groups.name);
@@ -141,13 +141,13 @@ function compareSchema(actual, test) {
  * @param {!DateTime} fromDate Starting date for lookback
  * @param {number} numDays Number of days to lookback
  * @param {string=} dateFormat Format string for date
- * @return {!array} Lookback date strings
+ * @return {!Set} Lookback date strings
  */
 function getLookbackDates(fromDate, numDays, dateFormat = DATE_FORMAT) {
-  const lookbackDates = {};
+  const lookbackDates = new Set();
   for (let days = 1; days <= numDays; days++) {
     const date = fromDate.minus({days}).toFormat(dateFormat);
-    lookbackDates[date] = null;
+    lookbackDates.add(date);
   }
   return lookbackDates;
 }
@@ -260,7 +260,7 @@ async function main(req, h) {
     info('Calculating lookback days.');
     const today = DateTime.utc();
     const lookbackDates = getLookbackDates(today, LOOKBACK_DAYS);
-    info(`Lookback dates: ${Object.keys(lookbackDates)}`);
+    info(`Lookback dates: ${[...lookbackDates]}`);
 
     info('Checking ingested dates.');
     const [rows] = await bq.query(`
@@ -269,16 +269,21 @@ async function main(req, h) {
       ORDER BY ${DATE_FIELD} DESC
       LIMIT ${LOOKBACK_DAYS}
     `);
-    const ingestedDates = rows.map((row) => row[DATE_FIELD].value);
-    info(`Ingested dates: ${ingestedDates}`);
+    const ingestedDates = new Set(rows.map((row) => row[DATE_FIELD].value));
+    info(`Ingested dates: ${[...ingestedDates]}`);
 
     info('Calculating required dates.');
-    for (const date of ingestedDates) {
-      if (date in lookbackDates) {
-        delete lookbackDates[date]; // remove ingested dates
+    const requiredDates = new Set();
+    for (const date of lookbackDates.values()) {
+      if (!ingestedDates.has(date)) {
+        requiredDates.add(date);
       }
     }
-    info(`Required dates: ${Object.keys(lookbackDates)}`);
+
+    info(`Required dates: ${[...requiredDates]}`);
+    if (requiredDates.length === 0) {
+      return resolve('No dates to ingest.');
+    }
 
     info('Enumerating DCM reports.');
     const reportFiles = {};
@@ -302,21 +307,21 @@ async function main(req, h) {
       for (const item of data.items) {
         if (item.status.match(REPORT_AVAIL_PATTERN)) {
           const reportDate = item.dateRange.endDate;
-          if (reportDate in lookbackDates) {
+          if (requiredDates.has(reportDate)) {
             reportFiles[item.id] = item;
-            delete lookbackDates[reportDate]; // remove found dates
+            requiredDates.delete(reportDate);
           }
           latestDate = DateTime.fromFormat(reportDate, DATE_FORMAT);
         }
       }
 
       if ((today.diff(latestDate).as('days') > LOOKBACK_DAYS) // exceeded window
-          || lookbackDates.length === 0) { // no required dates remaining
+          || requiredDates.length === 0) { // no required dates remaining
         break;
       }
     } while (nextPageToken);
 
-    info(`Unresolved dates: ${Object.keys(lookbackDates)}`);
+    info(`Unresolved dates: ${[...requiredDates]}`);
     if (!Object.entries(reportFiles).length) {
       return resolve('No reports to ingest.');
     }
@@ -356,8 +361,7 @@ async function main(req, h) {
               .on('complete', _resolve)
         ));
       } catch (err) {
-        error(`${fileId}: ${err.message}`);
-        continue;
+        error(err);
       }
     }
     return resolve('Reports ingested.');
