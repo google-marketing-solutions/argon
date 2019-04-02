@@ -25,11 +25,12 @@ const {Readable} = require('stream');
 const {createKey, deleteKey} = require('./auth.js');
 
 
-// Configurable values
+// Parameters
 const LOOKBACK_DAYS = 7;
 const DATE_FIELD = 'date';
 
 
+// Constants
 const IAM_PAUSE_MS = 1000;
 
 const REPORTING_BASE_URL = 'https://www.googleapis.com/dfareporting/v3.3';
@@ -199,10 +200,6 @@ async function main(req, h) {
       throw Error('Provide Account Email ID');
     }
 
-    const reportUrl = `${REPORTING_BASE_URL}` +
-      `/userprofiles/${profileId}` +
-      `/reports/${reportId}`;
-
     info(`Connector started for Report ${reportId} & Dataset ${datasetId}.`);
 
     info(`Creating a new IAM key for ${emailId} on project ${projectId}.`);
@@ -217,6 +214,9 @@ async function main(req, h) {
     const dcm = await auth.getClient({scopes: REPORTING_SCOPES, credentials});
 
     info(`Checking for existence of Report ${reportId}`);
+    const reportUrl = `${REPORTING_BASE_URL}` +
+      `/userprofiles/${profileId}` +
+      `/reports/${reportId}`;
     const {data: checkData} = await dcm.request({url: reportUrl});
     if (!checkData) {
       throw Error('Report not found.');
@@ -298,12 +298,12 @@ async function main(req, h) {
       };
 
       const {data} = await dcm.request({url: enumUrl, params: enumParams});
-      if (!data) {
-        throw Error('Report files not found.');
+      if (!data || !data.items || data.items.length === 0) {
+        break; // no more files
       }
       nextPageToken = data.nextPageToken;
 
-      let latestDate;
+      let latestDate = null;
       for (const item of data.items) {
         if (item.status.match(REPORT_AVAIL_PATTERN)) {
           const reportDate = item.dateRange.endDate;
@@ -315,23 +315,28 @@ async function main(req, h) {
         }
       }
 
-      if ((today.diff(latestDate).as('days') > LOOKBACK_DAYS) // exceeded window
-          || requiredDates.length === 0) { // no required dates remaining
-        break;
+      if (requiredDates.length === 0) {
+        break; // no required dates remaining
+      } else if (latestDate === null) {
+        continue; // no generated reports on this page
+      } else if (today.diff(latestDate).as('days') > LOOKBACK_DAYS) {
+        break; // exceeded lookback window
       }
     } while (nextPageToken);
 
     info(`Unresolved dates: ${[...requiredDates]}`);
-    if (!Object.entries(reportFiles).length) {
+
+    if (Object.entries(reportFiles).length === 0) {
       return resolve('No reports to ingest.');
     }
 
     info('Ingesting reports.');
-    for (const [fileId, data] of Object.entries(reportFiles)) {
-      info(`Fetching report file ${fileId} for ${data.dateRange.endDate}.`);
+    for (const [fileId, fileInfo] of Object.entries(reportFiles)) {
+      info(`Fetching report file ${fileId} for ${fileInfo.dateRange.endDate}.`);
       try {
-        const fileUrl = data.urls.apiUrl;
+        const fileUrl = fileInfo.urls.apiUrl;
         const {data: file} = await dcm.request({url: fileUrl});
+
         if (!file) {
           throw Error('Report file is unavailable.');
         }
@@ -356,7 +361,7 @@ async function main(req, h) {
 
         info('Uploading data to BQ table.');
         await new Promise((_resolve, _reject) => (
-          csv.pipe(table.createWriteStream())
+          csv.pipe(table.createWriteStream('csv'))
               .on('error', _reject)
               .on('complete', _resolve)
         ));
@@ -394,8 +399,8 @@ server.route({
 (async function init() {
   try {
     await server.start();
-    console.log(`Server running at: ${server.info.uri}`);
+    info(`Server running at: ${server.info.uri}`);
   } catch (err) {
-    console.log(`Server crashed with: ${err.message}`);
+    info(`Server crashed with: ${err.message}`);
   }
 }());
