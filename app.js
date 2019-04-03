@@ -17,10 +17,11 @@
 'use strict';
 
 const Hapi = require('hapi');
+const split = require('split2');
 const {GoogleAuth} = require('google-auth-library');
 const {BigQuery} = require('@google-cloud/bigquery');
 const {DateTime} = require('luxon');
-const {Readable} = require('stream');
+const {Transform} = require('stream');
 
 const {createKey, deleteKey} = require('./auth.js');
 
@@ -37,9 +38,10 @@ const REPORTING_BASE_URL = 'https://www.googleapis.com/dfareporting/v3.3';
 const REPORTING_SCOPES = ['https://www.googleapis.com/auth/dfareporting'];
 
 const DFA_NAME_PATTERN = /^dfa:(?<name>.*)/;
-const REPORT_AVAIL_PATTERN = /REPORT_AVAILABLE/;
-const FIELDS_PATTERN = /\nReport Fields\n(?<fields>.*)\n/;
-const ENDING_PATTERN = /\nGrand Total:/;
+
+const REPORT_AVAIL = 'REPORT_AVAILABLE';
+const REPORT_FIELDS = 'Report Fields';
+
 const DATE_FORMAT = 'yyyy-MM-dd';
 
 
@@ -167,6 +169,54 @@ function decodePayload(payload) {
   }
 }
 
+/**
+ * Extracts the relevant CSV lines from a DCM Report
+ */
+class ExtractCSV extends Transform {
+  constructor() {
+    super();
+    this.previous = null;
+    this.buffer = -1;
+    this.counter = 0;
+  }
+
+  _transform(chunk, enc, done) {
+    if (this.buffer === 0) {
+      this.push(this.previous);
+      ++this.counter;
+      this.previous = chunk;
+    } else if (this.buffer > 0) {
+      // buffer to always stay one chunk behind
+      // ignore the fieldnames and final summary lines
+      this.previous = chunk;
+      --this.buffer;
+    } else {
+      const current = chunk.toString();
+      if (current === REPORT_FIELDS) {
+        // found report fields indicator
+        this.buffer = 2;
+      }
+    }
+    return done();
+  }
+
+  _flush(done) {
+    info(`Processed ${this.counter} lines.`);
+    return done();
+  }
+}
+
+/**
+ * Adds a newline after every chunk in the stream
+ */
+class Newliner extends Transform {
+  _transform(chunk, enc, done) {
+    this.push(chunk);
+    this.push('\n');
+    return done();
+  }
+}
+
 
 async function main(req, h) {
   // handler function aliases, bound to the hapi `h` handler
@@ -287,7 +337,7 @@ async function main(req, h) {
 
     info('Enumerating DCM reports.');
     const reportFiles = {};
-    let nextPageToken = null;
+    let nextPageToken = '';
     do {
       const enumUrl = `${reportUrl}/files`;
       const enumParams = {
@@ -305,7 +355,7 @@ async function main(req, h) {
 
       let latestDate = null;
       for (const item of data.items) {
-        if (item.status.match(REPORT_AVAIL_PATTERN)) {
+        if (item.status === REPORT_AVAIL) {
           const reportDate = item.dateRange.endDate;
           if (requiredDates.has(reportDate)) {
             reportFiles[item.id] = item;
@@ -322,7 +372,7 @@ async function main(req, h) {
       } else if (today.diff(latestDate).as('days') > LOOKBACK_DAYS) {
         break; // exceeded lookback window
       }
-    } while (nextPageToken);
+    } while (nextPageToken !== '');
 
     info(`Unresolved dates: ${[...requiredDates]}`);
 
@@ -335,33 +385,20 @@ async function main(req, h) {
       info(`Fetching report file ${fileId} for ${fileInfo.dateRange.endDate}.`);
       try {
         const fileUrl = fileInfo.urls.apiUrl;
-        const {data: file} = await dcm.request({url: fileUrl});
-
-        if (!file) {
-          throw Error('Report file is unavailable.');
-        }
-
-        const fieldsResult = FIELDS_PATTERN.exec(file);
-        if (!fieldsResult) {
-          throw Error('Fieldnames not found.');
-        }
-
-        const endingResult = ENDING_PATTERN.exec(file);
-        if (!endingResult) {
-          throw Error('File ending not found.');
-        }
-
-        const content = file.slice(
-            fieldsResult.index + fieldsResult[0].length, // end of fields line
-            endingResult.index + 1 // beginning of ending line
-        );
-        const csv = new Readable();
-        csv.push(content);
-        csv.push(null);
+        const fileOpts = {responseType: 'stream'};
+        const {data: file} = await dcm.request({url: fileUrl, ...fileOpts});
 
         info('Uploading data to BQ table.');
+        const bqOpts = {
+          sourceFormat: 'CSV',
+          fieldDelimiter: ',',
+          nullMarker: '(not set)',
+        };
         await new Promise((_resolve, _reject) => (
-          csv.pipe(table.createWriteStream('csv'))
+          file.pipe(split()) // split at newlines
+              .pipe(new ExtractCSV()) // extract CSV lines
+              .pipe(new Newliner()) // add newlines back
+              .pipe(table.createWriteStream(bqOpts))
               .on('error', _reject)
               .on('complete', _resolve)
         ));
