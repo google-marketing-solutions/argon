@@ -17,11 +17,14 @@
 'use strict';
 
 const Hapi = require('hapi');
+const util = require('util');
 const split = require('split2');
 const {GoogleAuth} = require('google-auth-library');
 const {BigQuery} = require('@google-cloud/bigquery');
 const {DateTime} = require('luxon');
-const {Transform} = require('stream');
+const {Transform, pipeline: pipeline_} = require('stream');
+
+const pipeline = util.promisify(pipeline_);
 
 const {createKey, deleteKey} = require('./auth.js');
 
@@ -37,8 +40,6 @@ const IAM_PAUSE_MS = 1000;
 const REPORTING_BASE_URL = 'https://www.googleapis.com/dfareporting/v3.3';
 const REPORTING_SCOPES = ['https://www.googleapis.com/auth/dfareporting'];
 
-const DFA_NAME_PATTERN = /^dfa:(?<name>.*)/;
-
 const REPORT_AVAIL = 'REPORT_AVAILABLE';
 const REPORT_FIELDS = 'Report Fields';
 
@@ -50,15 +51,15 @@ async function sleep(milliseconds) {
 }
 
 function log(thing) {
-  console.log(thing);
+  console.dir(thing, {depth: null});
 }
 
 function info(msg) {
-  log(`Info: ${msg}`);
+  console.log(`Info: ${msg}`);
 }
 
 function error(err) {
-  log(`${err.stack || err}`);
+  console.log(`${err.stack || err}`);
 }
 
 async function failure(h, err) {
@@ -82,6 +83,16 @@ function getTableName(name) {
 }
 
 /**
+ * Converts a DFA API name to the real name.
+ *
+ * @param {string} name API name
+ * @return {string} Real name
+ */
+function getDfaName(name) {
+  return name.replace('dfa:', '');
+}
+
+/**
  * Extracts valid fieldnames for dimensions & metrics from their DFA API names.
  *
  * @param {!object} data DFA API response for the report
@@ -93,10 +104,33 @@ function getFieldnames(data) {
       .replace( /_(.)/g, (c) => c.toUpperCase())
       .replace(/_/g, '');
   const criteria = data[`${criteriaType}Criteria`] || data.criteria;
-  const dimensions = criteria.dimensions.map((dimension) => dimension.name);
-  const metrics = criteria.metricNames;
-  const dfaNames = dimensions.concat(metrics);
-  const names = dfaNames.map((name) => DFA_NAME_PATTERN.exec(name).groups.name);
+  info(`Using ${criteriaType} to parse fieldnames.`);
+
+  let dfaNames = [];
+
+  if (criteria.dimensions) {
+    const dimensions = criteria.dimensions.map((d) => d.name);
+    dfaNames = dfaNames.concat(dimensions);
+  }
+
+  if (criteria.metricNames) {
+    const metrics = criteria.metricNames;
+    dfaNames = dfaNames.concat(metrics);
+  }
+
+  if (criteria.activities) {
+    const activities = criteria.activities.filters
+        .map((f) => criteria.activities.metricNames.map((n) => `${n}_${f.id}`));
+    dfaNames = dfaNames.concat(...activities);
+  }
+
+  if (criteria.customRichMediaEvents) {
+    const richMediaEvents = criteria.customRichMediaEvents.filteredEventIds
+        .map((e) => `richMediaEvent_${e.id}`);
+    dfaNames = dfaNames.concat(richMediaEvents);
+  }
+
+  const names = dfaNames.map(getDfaName);
   return names;
 }
 
@@ -173,46 +207,62 @@ function decodePayload(payload) {
  * Extracts the relevant CSV lines from a DCM Report
  */
 class ExtractCSV extends Transform {
-  constructor() {
+  constructor(fields) {
     super();
+    this.numFields = fields.length;
+    this.fields = null;
     this.previous = null;
-    this.buffer = -1;
+    this.fieldsFound = false;
+    this.csvFound = false;
+    this.passthrough = false;
     this.counter = 0;
   }
 
   _transform(chunk, enc, done) {
-    if (this.buffer === 0) {
+    if (this.passthrough) {
       this.push(this.previous);
+      this.push('\n');
       ++this.counter;
       this.previous = chunk;
-    } else if (this.buffer > 0) {
-      // buffer to always stay one chunk behind
-      // ignore the fieldnames and final summary lines
+    } else if (this.csvFound) {
+      // start buffering one line behind
       this.previous = chunk;
-      --this.buffer;
-    } else {
-      const current = chunk.toString();
-      if (current === REPORT_FIELDS) {
-        // found report fields indicator
-        this.buffer = 2;
+      this.passthrough = true;
+    } else if (this.fieldsFound) {
+      // store field names
+      this.fields = chunk.toString().split(',');
+      info('Report file fields:');
+      log(this.fields);
+      if (this.fields.length !== this.numFields) {
+        this.emit('error', Error('CSV fields do not match table schema.'));
       }
+      this.csvFound = true;
+    } else if (chunk.toString() === REPORT_FIELDS) {
+      // found report fields indicator
+      this.fieldsFound = true;
     }
     return done();
   }
 
   _flush(done) {
-    info(`Processed ${this.counter} lines.`);
+    if (!this.fieldsFound) {
+      this.emit('error', Error('No CSV fieldnames found.'));
+    } else if (this.counter === 0) {
+      this.emit('error', Error('No CSV lines found.'));
+    } else {
+      info(`Processed ${this.counter} lines.`);
+    }
     return done();
   }
 }
 
 /**
- * Adds a newline after every chunk in the stream
+ * Logs stream chunks to console as they passthrough
  */
-class Newliner extends Transform {
+class StreamLogger extends Transform {
   _transform(chunk, enc, done) {
+    console.log(chunk.toString());
     this.push(chunk);
-    this.push('\n');
     return done();
   }
 }
@@ -231,7 +281,7 @@ async function main(req, h) {
 
     projectId = process.env.GOOGLE_CLOUD_PROJECT;
     if (!projectId) {
-      throw Error('Provide Google Cloud Project ID');
+      throw Error('Provide Google Cloud Project ID.');
     }
 
     const payload = decodePayload(req.payload);
@@ -242,12 +292,12 @@ async function main(req, h) {
 
     const profileId = payload.profileId;
     if (!profileId) {
-      throw Error('Provide DCM Profile ID');
+      throw Error('Provide DCM Profile ID.');
     }
 
     emailId = payload.emailId;
     if (!emailId) {
-      throw Error('Provide Account Email ID');
+      throw Error('Provide Account Email ID.');
     }
 
     info(`Connector started for Report ${reportId} & Dataset ${datasetId}.`);
@@ -263,7 +313,7 @@ async function main(req, h) {
     const auth = new GoogleAuth();
     const dcm = await auth.getClient({scopes: REPORTING_SCOPES, credentials});
 
-    info(`Checking for existence of Report ${reportId}`);
+    info(`Checking for existence of Report ${reportId}.`);
     const reportUrl = `${REPORTING_BASE_URL}` +
       `/userprofiles/${profileId}` +
       `/reports/${reportId}`;
@@ -283,7 +333,7 @@ async function main(req, h) {
     info('Initializing the BQ client.');
     const bq = await new BigQuery({projectId, credentials});
 
-    info(`Checking for existence of Dataset ${datasetId}`);
+    info(`Checking for existence of Dataset ${datasetId}.`);
     const dataset = bq.dataset(datasetId);
     const [datasetExists] = await dataset.exists();
     if (!datasetExists) {
@@ -291,7 +341,7 @@ async function main(req, h) {
     }
 
     const tableName = getTableName(reportName);
-    info(`Checking for existence of Table ${tableName}`);
+    info(`Checking for existence of Table ${tableName}.`);
     const table = dataset.table(tableName);
     const [tableExists] = await table.exists();
     if (!tableExists) {
@@ -394,14 +444,12 @@ async function main(req, h) {
           fieldDelimiter: ',',
           nullMarker: '(not set)',
         };
-        await new Promise((_resolve, _reject) => (
-          file.pipe(split()) // split at newlines
-              .pipe(new ExtractCSV()) // extract CSV lines
-              .pipe(new Newliner()) // add newlines back
-              .pipe(table.createWriteStream(bqOpts))
-              .on('error', _reject)
-              .on('complete', _resolve)
-        ));
+        await pipeline(
+            file, // report file
+            split(), // split at newlines
+            new ExtractCSV(fields), // extract CSV lines
+            table.createWriteStream(bqOpts)
+        );
       } catch (err) {
         error(err);
       }
