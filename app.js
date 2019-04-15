@@ -1,5 +1,5 @@
 /**
- * Copyright 2018 Google LLC
+ * Copyright 2019 Google LLC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,8 +17,8 @@
 'use strict';
 
 const Hapi = require('hapi');
-const util = require('util');
 const split = require('split2');
+const util = require('util');
 const {GoogleAuth} = require('google-auth-library');
 const {BigQuery} = require('@google-cloud/bigquery');
 const {DateTime} = require('luxon');
@@ -28,11 +28,9 @@ const pipeline = util.promisify(pipeline_);
 
 const {createKey, deleteKey} = require('./auth.js');
 
-
 // Parameters
 const LOOKBACK_DAYS = 7;
 const DATE_FIELD = 'date';
-
 
 // Constants
 const IAM_PAUSE_MS = 1000;
@@ -40,11 +38,11 @@ const IAM_PAUSE_MS = 1000;
 const REPORTING_BASE_URL = 'https://www.googleapis.com/dfareporting/v3.3';
 const REPORTING_SCOPES = ['https://www.googleapis.com/auth/dfareporting'];
 
-const REPORT_AVAIL = 'REPORT_AVAILABLE';
+const REPORT_AVAILABLE = 'REPORT_AVAILABLE';
 const REPORT_FIELDS = 'Report Fields';
 
 const DATE_FORMAT = 'yyyy-MM-dd';
-
+const NULL_VALUE = '(not set)';
 
 async function sleep(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
@@ -59,7 +57,7 @@ function info(msg) {
 }
 
 function error(err) {
-  console.log(`${err.stack || err}`);
+  console.log(err);
 }
 
 async function failure(h, err) {
@@ -83,16 +81,6 @@ function getTableName(name) {
 }
 
 /**
- * Converts a DFA API name to the real name.
- *
- * @param {string} name API name
- * @return {string} Real name
- */
-function getDfaName(name) {
-  return name.replace('dfa:', '');
-}
-
-/**
  * Extracts valid fieldnames for dimensions & metrics from their DFA API names.
  *
  * @param {!object} data DFA API response for the report
@@ -101,7 +89,7 @@ function getDfaName(name) {
 function getFieldnames(data) {
   const criteriaType = data.type
       .toLowerCase()
-      .replace( /_(.)/g, (c) => c.toUpperCase())
+      .replace(/_(.)/g, (c) => c.toUpperCase())
       .replace(/_/g, '');
   const criteria = data[`${criteriaType}Criteria`] || data.criteria;
   info(`Using ${criteriaType} to parse fieldnames.`);
@@ -119,19 +107,20 @@ function getFieldnames(data) {
   }
 
   if (criteria.activities) {
-    const activities = criteria.activities.filters
-        .map((f) => criteria.activities.metricNames.map((n) => `${n}_${f.id}`));
+    const activities = criteria.activities.filters.map((f) =>
+      criteria.activities.metricNames.map((n) => `${n}_${f.id}`)
+    );
     dfaNames = dfaNames.concat(...activities);
   }
 
   if (criteria.customRichMediaEvents) {
-    const richMediaEvents = criteria.customRichMediaEvents.filteredEventIds
-        .map((e) => `richMediaEvent_${e.id}`);
+    const richMediaEvents = criteria.customRichMediaEvents.filteredEventIds.map(
+        (e) => `richMediaEvent_${e.id}`
+    );
     dfaNames = dfaNames.concat(richMediaEvents);
   }
 
-  const names = dfaNames.map(getDfaName);
-  return names;
+  return dfaNames.map((n) => n.replace('dfa:', ''));
 }
 
 /**
@@ -163,9 +152,11 @@ function compareSchema(actual, test) {
     return false;
   }
   for (const i in test) {
-    if (!test[i]
-        || actual[i].name !== test[i].name
-        || actual[i].type !== test[i].type) {
+    if (
+      !test[i] ||
+      actual[i].name !== test[i].name ||
+      actual[i].type !== test[i].type
+    ) {
       return false;
     }
   }
@@ -180,10 +171,10 @@ function compareSchema(actual, test) {
  * @param {string=} dateFormat Format string for date
  * @return {!Set} Lookback date strings
  */
-function getLookbackDates(fromDate, numDays, dateFormat = DATE_FORMAT) {
+function getLookbackDates(fromDate, numDays) {
   const lookbackDates = new Set();
-  for (let days = 1; days <= numDays; days++) {
-    const date = fromDate.minus({days}).toFormat(dateFormat);
+  for (let days = 1; days <= numDays; ++days) {
+    const date = fromDate.minus({days}).toFormat(DATE_FORMAT);
     lookbackDates.add(date);
   }
   return lookbackDates;
@@ -210,7 +201,6 @@ class ExtractCSV extends Transform {
   constructor(fields) {
     super();
     this.numFields = fields.length;
-    this.fields = null;
     this.previous = null;
     this.fieldsFound = false;
     this.csvFound = false;
@@ -230,10 +220,10 @@ class ExtractCSV extends Transform {
       this.passthrough = true;
     } else if (this.fieldsFound) {
       // store field names
-      this.fields = chunk.toString().split(',');
+      const fields = chunk.toString().split(',');
       info('Report file fields:');
-      log(this.fields);
-      if (this.fields.length !== this.numFields) {
+      log(fields);
+      if (fields.length !== this.numFields) {
         this.emit('error', Error('CSV fields do not match table schema.'));
       }
       this.csvFound = true;
@@ -267,13 +257,14 @@ class StreamLogger extends Transform {
   }
 }
 
-
 async function main(req, h) {
   // handler function aliases, bound to the hapi `h` handler
   const reject = (err) => failure(h, err);
   const resolve = (msg) => success(h, msg);
 
-  let projectId, emailId, keyId;
+  let projectId;
+  let emailId;
+  let keyId;
 
   try {
     const datasetId = req.params.datasetId;
@@ -314,7 +305,8 @@ async function main(req, h) {
     const dcm = await auth.getClient({scopes: REPORTING_SCOPES, credentials});
 
     info(`Checking for existence of Report ${reportId}.`);
-    const reportUrl = `${REPORTING_BASE_URL}` +
+    const reportUrl =
+      `${REPORTING_BASE_URL}` +
       `/userprofiles/${profileId}` +
       `/reports/${reportId}`;
     const {data: checkData} = await dcm.request({url: reportUrl});
@@ -351,7 +343,11 @@ async function main(req, h) {
     }
 
     info('Fetching BQ table metadata for verification.');
-    const [{schema: {fields: actualFields}}] = await table.getMetadata();
+    const [
+      {
+        schema: {fields: actualFields},
+      },
+    ] = await table.getMetadata();
     const schemaMatches = compareSchema(actualFields, fields);
     if (!schemaMatches) {
       throw Error('Schema mismatch encountered.');
@@ -405,7 +401,7 @@ async function main(req, h) {
 
       let latestDate = null;
       for (const item of data.items) {
-        if (item.status === REPORT_AVAIL) {
+        if (item.status === REPORT_AVAILABLE) {
           const reportDate = item.dateRange.endDate;
           if (requiredDates.has(reportDate)) {
             reportFiles[item.id] = item;
@@ -437,18 +433,22 @@ async function main(req, h) {
         const fileUrl = fileInfo.urls.apiUrl;
         const fileOpts = {responseType: 'stream'};
         const {data: file} = await dcm.request({url: fileUrl, ...fileOpts});
+        if (!file) {
+          error('Report file not found.');
+          continue;
+        }
 
         info('Uploading data to BQ table.');
         const bqOpts = {
           sourceFormat: 'CSV',
           fieldDelimiter: ',',
-          nullMarker: '(not set)',
+          nullMarker: NULL_VALUE,
         };
         await pipeline(
             file, // report file
             split(), // split at newlines
             new ExtractCSV(fields), // extract CSV lines
-            table.createWriteStream(bqOpts)
+            table.createWriteStream(bqOpts) // upload to bigquery
         );
       } catch (err) {
         error(err);
@@ -469,7 +469,6 @@ async function main(req, h) {
   }
 }
 
-
 const server = Hapi.server({
   port: process.env.PORT || 8080,
   host: '0.0.0.0',
@@ -488,4 +487,4 @@ server.route({
   } catch (err) {
     info(`Server crashed with: ${err.message}`);
   }
-}());
+})();

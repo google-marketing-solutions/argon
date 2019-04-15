@@ -36,5 +36,6 @@ There are some restrictions on the reports that Argon can handle:
 export GOOGLE_CLOUD_PROJECT="[PROJECT_ID]"
 export GOOGLE_APPLICATION_CREDENTIALS="[PATH_TO_KEYFILE]"
 npm install
-npm run start-dev
+npm run dev     # run local server
+npm run format  # format local files
 ```

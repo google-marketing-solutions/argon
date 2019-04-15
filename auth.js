@@ -1,5 +1,5 @@
 /**
- * Copyright 2018 Google LLC
+ * Copyright 2019 Google LLC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,7 +21,6 @@ const {auth} = require('google-auth-library');
 const CLOUD_PLATFORM_SCOPE = ['https://www.googleapis.com/auth/cloud-platform'];
 const IAM_BASE_URL = 'https://content-iam.googleapis.com/v1';
 
-
 /**
  * Creates a key for the service account. This method uses the default
  * app engine service account to create the keys, so make sure it
@@ -30,7 +29,7 @@ const IAM_BASE_URL = 'https://content-iam.googleapis.com/v1';
  *
  * @param {string} projectId Cloud project ID
  * @param {string} serviceAccount Service account email address
- * @return {object!} Key credentials
+ * @return {!object} Key credentials
  */
 async function createKey(projectId, serviceAccount) {
   if (!projectId) {
@@ -42,7 +41,8 @@ async function createKey(projectId, serviceAccount) {
 
   const client = await auth.getClient({scopes: CLOUD_PLATFORM_SCOPE});
 
-  const url = `${IAM_BASE_URL}` +
+  const url =
+    `${IAM_BASE_URL}` +
     `/projects/${projectId}` +
     `/serviceAccounts/${serviceAccount}` +
     `/keys`;
@@ -71,7 +71,7 @@ async function createKey(projectId, serviceAccount) {
  * @param {string} projectId Cloud project ID
  * @param {string} serviceAccount Service account email address
  * @param {string} privateKeyId Private key ID to delete
- * @return {Promise!} Deletion request
+ * @return {!Promise} Deletion request
  */
 async function deleteKey(projectId, serviceAccount, privateKeyId) {
   if (!projectId) {
@@ -86,7 +86,8 @@ async function deleteKey(projectId, serviceAccount, privateKeyId) {
 
   const client = await auth.getClient({scopes: CLOUD_PLATFORM_SCOPE});
 
-  const url = `${IAM_BASE_URL}` +
+  const url =
+    `${IAM_BASE_URL}` +
     `/projects/${projectId}` +
     `/serviceAccounts/${serviceAccount}` +
     `/keys/${privateKeyId}`;

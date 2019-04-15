@@ -1,28 +1,32 @@
 {
   "name": "argon",
-  "version": "0.0.1",
-  "description": "DCM Reporting to BigQuery connector",
+  "version": "1.0.0",
+  "description": "Campaign Manager Reporting to BigQuery connector",
   "main": "app.js",
   "engines": {
     "node": ">=10"
   },
   "scripts": {
     "start": "node app.js",
-    "start-dev": "nodemon app.js",
+    "dev": "nodemon app.js",
+    "format": "prettier-eslint --write *.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "Google Inc.",
   "license": "Apache-2.0",
   "dependencies": {
-    "@google-cloud/bigquery": "^2.1.0",
+    "@google-cloud/bigquery": "^3.0.0",
     "google-auth-library": "^3.1.2",
     "hapi": "^18.1.0",
-    "luxon": "^1.12.0",
+    "luxon": "^1.12.1",
     "split2": "^3.1.1"
   },
   "devDependencies": {
-    "eslint": "^5.15.3",
+    "eslint": "^5.16.0",
     "eslint-config-google": "^0.12.0",
-    "nodemon": "^1.18.10"
+    "nodemon": "^1.18.11",
+    "prettier": "^1.17.0",
+    "prettier-eslint": "^8.8.2",
+    "prettier-eslint-cli": "^4.7.1"
   }
 }
