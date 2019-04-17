@@ -30,7 +30,6 @@ const {createKey, deleteKey} = require('./auth.js');
 
 // Parameters
 const LOOKBACK_DAYS = 7;
-const DATE_FIELD = 'date';
 
 // Constants
 const IAM_PAUSE_MS = 1000;
@@ -80,60 +79,196 @@ function getTableName(name) {
   return name.replace(/[^a-zA-Z0-9]/g, '_');
 }
 
+function getCrossDimensionReachNames(criteria) {
+  let names = [];
+  if (criteria.breakdown) {
+    names = names.concat(criteria.breakdown.map((d) => d.name));
+  }
+  if (criteria.metricNames) {
+    names = names.concat(criteria.metricNames);
+  }
+  if (criteria.overlapMetricNames) {
+    names = names.concat(criteria.overlapMetricNames);
+  }
+  return names;
+}
+
+function getFloodlightNames(criteria) {
+  let names = [];
+  if (criteria.dimensions) {
+    names = names.concat(criteria.dimensions.map((d) => d.name));
+  }
+  if (criteria.metricNames) {
+    names = names.concat(criteria.metricNames);
+  }
+  if (criteria.customRichMediaEvents) {
+    names = names.concat(
+        criteria.customRichMediaEvents.filteredEventIds.map(
+            (e) => e.dimensionName || `richMediaEvent_${e.id}`
+        )
+    );
+  }
+  return names;
+}
+
+function getPathToConversionNames(criteria) {
+  let names = [];
+
+  if (criteria.conversionDimensions) {
+    names = names.concat(criteria.conversionDimensions.map((d) => d.name));
+  }
+  if (criteria.perInteractionDimensions) {
+    names = names.concat(criteria.perInteractionDimensions.map((d) => d.name));
+  }
+  if (criteria.metricNames) {
+    names = names.concat(criteria.metricNames);
+  }
+  if (criteria.customFloodlightVariables) {
+    names = names.concat(criteria.customFloodlightVariables.map((d) => d.name));
+  }
+  if (criteria.customRichMediaEvents) {
+    names = names.concat(
+        criteria.customRichMediaEvents.map((d) => d.dimensionName)
+    );
+  }
+  return names;
+}
+
+function getReachNames(criteria) {
+  let names = [];
+  if (criteria.dimensions) {
+    names = names.concat(criteria.dimensions.map((d) => d.name));
+  }
+  if (criteria.metricNames) {
+    names = names.concat(criteria.metricNames);
+  }
+  if (criteria.reachByFrequencyMetricNames) {
+    names = names.concat(criteria.reachByFrequencyMetricNames);
+  }
+  if (criteria.activities) {
+    names = names.concat(
+        ...criteria.activities.filters.map((f) =>
+          criteria.activities.metricNames.map((n) => `${n}_${f.id}`)
+        )
+    );
+  }
+  if (criteria.customRichMediaEvents) {
+    names = names.concat(
+        criteria.customRichMediaEvents.filteredEventIds.map(
+            (e) => e.dimensionName || `richMediaEvent_${e.id}`
+        )
+    );
+  }
+  return names;
+}
+
+function getStandardNames(criteria) {
+  let names = [];
+  if (criteria.dimensions) {
+    names = names.concat(criteria.dimensions.map((d) => d.name));
+  }
+  if (criteria.metricNames) {
+    names = names.concat(criteria.metricNames);
+  }
+  if (criteria.activities) {
+    names = names.concat(
+        ...criteria.activities.filters.map((f) =>
+          criteria.activities.metricNames.map((n) => `${n}_${f.id}`)
+        )
+    );
+  }
+  if (criteria.customRichMediaEvents) {
+    names = names.concat(
+        criteria.customRichMediaEvents.filteredEventIds.map(
+            (e) => e.dimensionName || `richMediaEvent_${e.id}`
+        )
+    );
+  }
+  return names;
+}
+
 /**
- * Extracts valid fieldnames for dimensions & metrics from their DFA API names.
+ * Generates valid fieldnames from the DFA API response.
+ * Reference: https://developers.google.com/doubleclick-advertisers/v3.3/reports
  *
+ * @param {string} reportType Report type
  * @param {!object} data DFA API response for the report
- * @return {!array} Camel-Cased fieldnames
+ * @return {!array} Valid fieldnames
  */
-function getFieldnames(data) {
-  const criteriaType = data.type
+function getNames(reportType, data) {
+  info(`Detected report of type ${reportType}.`);
+  const criteriaType = reportType
       .toLowerCase()
       .replace(/_(.)/g, (c) => c.toUpperCase())
       .replace(/_/g, '');
   const criteria = data[`${criteriaType}Criteria`] || data.criteria;
   info(`Using ${criteriaType} to parse fieldnames.`);
 
-  let dfaNames = [];
-
-  if (criteria.dimensions) {
-    const dimensions = criteria.dimensions.map((d) => d.name);
-    dfaNames = dfaNames.concat(dimensions);
+  let names;
+  switch (reportType) {
+    case 'CROSS_DIMENSION_REACH':
+      names = getCrossDimensionReachNames(criteria);
+      break;
+    case 'FLOODLIGHT':
+      names = getFloodlightNames(criteria);
+      break;
+    case 'PATH_TO_CONVERSION':
+      names = getPathToConversionNames(criteria);
+      break;
+    case 'REACH':
+      names = getReachNames(criteria);
+      break;
+    case 'STANDARD':
+      names = getStandardNames(criteria);
+      break;
+    default:
+      throw Error('Unknown Report type encountered.');
   }
 
-  if (criteria.metricNames) {
-    const metrics = criteria.metricNames;
-    dfaNames = dfaNames.concat(metrics);
-  }
+  return names.map((n) => n.replace('dfa:', ''));
+}
 
-  if (criteria.activities) {
-    const activities = criteria.activities.filters.map((f) =>
-      criteria.activities.metricNames.map((n) => `${n}_${f.id}`)
-    );
-    dfaNames = dfaNames.concat(...activities);
+/**
+ * Determines the Date field and type for a given Report type.
+ *
+ * @param {string} reportType Report type
+ * @return {!object} Date info
+ */
+function getDateInfo(reportType) {
+  let dateField = 'date';
+  let dateType = 'DATE';
+  switch (reportType) {
+    case 'CROSS_DIMENSION_REACH':
+      break;
+    case 'FLOODLIGHT':
+      break;
+    case 'PATH_TO_CONVERSION':
+      dateField = 'activityTime';
+      dateType = 'DATETIME';
+      break;
+    case 'REACH':
+      break;
+    case 'STANDARD':
+      break;
+    default:
+      throw Error('Unknown Report type encountered.');
   }
-
-  if (criteria.customRichMediaEvents) {
-    const richMediaEvents = criteria.customRichMediaEvents.filteredEventIds.map(
-        (e) => `richMediaEvent_${e.id}`
-    );
-    dfaNames = dfaNames.concat(richMediaEvents);
-  }
-
-  return dfaNames.map((n) => n.replace('dfa:', ''));
+  return {dateField, dateType};
 }
 
 /**
  * Constructs fields from names with associated datatypes.
  *
  * @param {!array} names Fieldnames
- * @return {!array} Fields with types
+ * @param {string} dateField Date field
+ * @param {string} dateType Date type
+ * @return {!array} Fields with datatypes
  */
-function getFields(names) {
+function getFields(names, dateField, dateType) {
   const fields = names.map((name) => {
     let type = 'STRING';
-    if (name === DATE_FIELD) {
-      type = 'DATE';
+    if (name === dateField) {
+      type = dateType;
     }
     return {name, type};
   });
@@ -164,6 +299,37 @@ function compareSchema(actual, test) {
 }
 
 /**
+ * Builds the BigQuery query to lookback for a given path and date info.
+ *
+ * @param {string} path Table path
+ * @param {string} dateField Date field
+ * @param {string} dateType Date type
+ * @return {string} Lookback query
+ */
+function buildLookbackQuery(path, dateField, dateType) {
+  let query;
+  switch (dateType) {
+    case 'DATE':
+      query = `
+        SELECT DISTINCT ${dateField}
+        FROM \`${path}\`
+        ORDER BY ${dateField} DESC
+        LIMIT ${LOOKBACK_DAYS}
+      `;
+      break;
+    case 'DATETIME':
+      query = `
+        SELECT DISTINCT DATE(${dateField}) AS ${dateField}
+        FROM \`${path}\`
+        ORDER BY ${dateField} DESC
+        LIMIT ${LOOKBACK_DAYS}
+      `;
+      break;
+  }
+  return query;
+}
+
+/**
  * Generates lookback dates relative to the provided one.
  *
  * @param {!DateTime} fromDate Starting date for lookback
@@ -181,7 +347,7 @@ function getLookbackDates(fromDate, numDays) {
 }
 
 /**
- * Decodes a potentially base64 encoded payload
+ * Decodes a potentially base64 encoded payload.
  *
  * @param {!object} payload Unknown payload
  * @return {!object} JSON payload
@@ -195,7 +361,7 @@ function decodePayload(payload) {
 }
 
 /**
- * Extracts the relevant CSV lines from a DCM Report
+ * Extracts the relevant CSV lines from a DCM Report.
  */
 class ExtractCSV extends Transform {
   constructor(fields) {
@@ -247,7 +413,7 @@ class ExtractCSV extends Transform {
 }
 
 /**
- * Logs stream chunks to console as they passthrough
+ * Logs stream chunks to console as they passthrough.
  */
 class StreamLogger extends Transform {
   _transform(chunk, enc, done) {
@@ -313,11 +479,14 @@ async function main(req, h) {
     if (!checkData) {
       throw Error('Report not found.');
     }
+    log(checkData);
 
     info('Evaluating Report metadata.');
     const reportName = checkData.name;
-    const names = getFieldnames(checkData);
-    const fields = getFields(names);
+    const reportType = checkData.type;
+    const names = getNames(reportType, checkData);
+    const {dateField, dateType} = getDateInfo(reportType);
+    const fields = getFields(names, dateField, dateType);
     info(`Report Name: ${reportName}`);
     info(`Report Fields:`);
     log(fields);
@@ -359,13 +528,10 @@ async function main(req, h) {
     info(`Lookback dates: ${[...lookbackDates]}`);
 
     info('Checking ingested dates.');
-    const [rows] = await bq.query(`
-      SELECT DISTINCT ${DATE_FIELD}
-      FROM \`${projectId}.${datasetId}.${tableName}\`
-      ORDER BY ${DATE_FIELD} DESC
-      LIMIT ${LOOKBACK_DAYS}
-    `);
-    const ingestedDates = new Set(rows.map((row) => row[DATE_FIELD].value));
+    const path = `${projectId}.${datasetId}.${tableName}`;
+    const query = buildLookbackQuery(path, dateField, dateType);
+    const [rows] = await bq.query(query);
+    const ingestedDates = new Set(rows.map((row) => row[dateField].value));
     info(`Ingested dates: ${[...ingestedDates]}`);
 
     info('Calculating required dates.');
