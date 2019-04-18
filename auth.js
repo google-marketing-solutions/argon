@@ -96,5 +96,4 @@ async function deleteKey(projectId, serviceAccount, privateKeyId) {
   return client.request({url, method});
 }
 
-exports.deleteKey = deleteKey;
-exports.createKey = createKey;
+module.exports = {createKey, deleteKey};

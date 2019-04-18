@@ -22,411 +22,52 @@ const util = require('util');
 const {GoogleAuth} = require('google-auth-library');
 const {BigQuery} = require('@google-cloud/bigquery');
 const {DateTime} = require('luxon');
-const {Transform, pipeline: pipeline_} = require('stream');
+const {pipeline: pipeline_} = require('stream');
 
 const pipeline = util.promisify(pipeline_);
 
 const {createKey, deleteKey} = require('./auth.js');
+const {
+  buildLookbackQuery,
+  compareSchema,
+  decodePayload,
+  error,
+  getDateInfo,
+  getFields,
+  getLookbackDates,
+  getNames,
+  getTableName,
+  info,
+  log,
+  sleep,
+  ExtractCSV,
+} = require('./helpers.js');
 
 // Parameters
 const LOOKBACK_DAYS = 7;
 
 // Constants
-const IAM_PAUSE_MS = 1000;
+const IAM_SLEEP_MS = 1000;
+
+const BQ_DATE_FORMAT = 'yyyy-MM-dd';
+
+const DCM_NULL_VALUE = '(not set)';
+const DCM_FIELDS_INDICATOR = 'Report Fields';
+
+const DFA_REPORT_AVAILABLE = 'REPORT_AVAILABLE';
 
 const REPORTING_BASE_URL = 'https://www.googleapis.com/dfareporting/v3.3';
 const REPORTING_SCOPES = ['https://www.googleapis.com/auth/dfareporting'];
 
-const REPORT_AVAILABLE = 'REPORT_AVAILABLE';
-const REPORT_FIELDS = 'Report Fields';
-
-const DATE_FORMAT = 'yyyy-MM-dd';
-const NULL_VALUE = '(not set)';
-
-async function sleep(milliseconds) {
-  return new Promise((resolve) => setTimeout(resolve, milliseconds));
-}
-
-function log(thing) {
-  console.dir(thing, {depth: null});
-}
-
-function info(msg) {
-  console.log(`Info: ${msg}`);
-}
-
-function error(err) {
-  console.log(err);
-}
-
-async function failure(h, err) {
-  error(err);
-  return h.response({success: false, message: err.toString()}).code(500);
-}
-
-async function success(h, msg) {
-  info(msg);
-  return h.response({success: true, message: msg}).code(200);
-}
-
-/**
- * Converts a string to a valid BQ table name.
- *
- * @param {string} name Raw name
- * @return {string} Validated name
- */
-function getTableName(name) {
-  return name.replace(/[^a-zA-Z0-9]/g, '_');
-}
-
-function getCrossDimensionReachNames(criteria) {
-  let names = [];
-  if (criteria.breakdown) {
-    names = names.concat(criteria.breakdown.map((d) => d.name));
-  }
-  if (criteria.metricNames) {
-    names = names.concat(criteria.metricNames);
-  }
-  if (criteria.overlapMetricNames) {
-    names = names.concat(criteria.overlapMetricNames);
-  }
-  return names;
-}
-
-function getFloodlightNames(criteria) {
-  let names = [];
-  if (criteria.dimensions) {
-    names = names.concat(criteria.dimensions.map((d) => d.name));
-  }
-  if (criteria.metricNames) {
-    names = names.concat(criteria.metricNames);
-  }
-  if (criteria.customRichMediaEvents) {
-    names = names.concat(
-        criteria.customRichMediaEvents.filteredEventIds.map(
-            (e) => e.dimensionName || `richMediaEvent_${e.id}`
-        )
-    );
-  }
-  return names;
-}
-
-function getPathToConversionNames(criteria) {
-  let names = [];
-
-  if (criteria.conversionDimensions) {
-    names = names.concat(criteria.conversionDimensions.map((d) => d.name));
-  }
-  if (criteria.perInteractionDimensions) {
-    names = names.concat(criteria.perInteractionDimensions.map((d) => d.name));
-  }
-  if (criteria.metricNames) {
-    names = names.concat(criteria.metricNames);
-  }
-  if (criteria.customFloodlightVariables) {
-    names = names.concat(criteria.customFloodlightVariables.map((d) => d.name));
-  }
-  if (criteria.customRichMediaEvents) {
-    names = names.concat(
-        criteria.customRichMediaEvents.map((d) => d.dimensionName)
-    );
-  }
-  return names;
-}
-
-function getReachNames(criteria) {
-  let names = [];
-  if (criteria.dimensions) {
-    names = names.concat(criteria.dimensions.map((d) => d.name));
-  }
-  if (criteria.metricNames) {
-    names = names.concat(criteria.metricNames);
-  }
-  if (criteria.reachByFrequencyMetricNames) {
-    names = names.concat(criteria.reachByFrequencyMetricNames);
-  }
-  if (criteria.activities) {
-    names = names.concat(
-        ...criteria.activities.filters.map((f) =>
-          criteria.activities.metricNames.map((n) => `${n}_${f.id}`)
-        )
-    );
-  }
-  if (criteria.customRichMediaEvents) {
-    names = names.concat(
-        criteria.customRichMediaEvents.filteredEventIds.map(
-            (e) => e.dimensionName || `richMediaEvent_${e.id}`
-        )
-    );
-  }
-  return names;
-}
-
-function getStandardNames(criteria) {
-  let names = [];
-  if (criteria.dimensions) {
-    names = names.concat(criteria.dimensions.map((d) => d.name));
-  }
-  if (criteria.metricNames) {
-    names = names.concat(criteria.metricNames);
-  }
-  if (criteria.activities) {
-    names = names.concat(
-        ...criteria.activities.filters.map((f) =>
-          criteria.activities.metricNames.map((n) => `${n}_${f.id}`)
-        )
-    );
-  }
-  if (criteria.customRichMediaEvents) {
-    names = names.concat(
-        criteria.customRichMediaEvents.filteredEventIds.map(
-            (e) => e.dimensionName || `richMediaEvent_${e.id}`
-        )
-    );
-  }
-  return names;
-}
-
-/**
- * Generates valid fieldnames from the DFA API response.
- * Reference: https://developers.google.com/doubleclick-advertisers/v3.3/reports
- *
- * @param {string} reportType Report type
- * @param {!object} data DFA API response for the report
- * @return {!array} Valid fieldnames
- */
-function getNames(reportType, data) {
-  info(`Detected report of type ${reportType}.`);
-  const criteriaType = reportType
-      .toLowerCase()
-      .replace(/_(.)/g, (c) => c.toUpperCase())
-      .replace(/_/g, '');
-  const criteria = data[`${criteriaType}Criteria`] || data.criteria;
-  info(`Using ${criteriaType} to parse fieldnames.`);
-
-  let names;
-  switch (reportType) {
-    case 'CROSS_DIMENSION_REACH':
-      names = getCrossDimensionReachNames(criteria);
-      break;
-    case 'FLOODLIGHT':
-      names = getFloodlightNames(criteria);
-      break;
-    case 'PATH_TO_CONVERSION':
-      names = getPathToConversionNames(criteria);
-      break;
-    case 'REACH':
-      names = getReachNames(criteria);
-      break;
-    case 'STANDARD':
-      names = getStandardNames(criteria);
-      break;
-    default:
-      throw Error('Unknown Report type encountered.');
-  }
-
-  return names.map((n) => n.replace('dfa:', ''));
-}
-
-/**
- * Determines the Date field and type for a given Report type.
- *
- * @param {string} reportType Report type
- * @return {!object} Date info
- */
-function getDateInfo(reportType) {
-  let dateField = 'date';
-  let dateType = 'DATE';
-  switch (reportType) {
-    case 'CROSS_DIMENSION_REACH':
-      break;
-    case 'FLOODLIGHT':
-      break;
-    case 'PATH_TO_CONVERSION':
-      dateField = 'activityTime';
-      dateType = 'DATETIME';
-      break;
-    case 'REACH':
-      break;
-    case 'STANDARD':
-      break;
-    default:
-      throw Error('Unknown Report type encountered.');
-  }
-  return {dateField, dateType};
-}
-
-/**
- * Constructs fields from names with associated datatypes.
- *
- * @param {!array} names Fieldnames
- * @param {string} dateField Date field
- * @param {string} dateType Date type
- * @return {!array} Fields with datatypes
- */
-function getFields(names, dateField, dateType) {
-  const fields = names.map((name) => {
-    let type = 'STRING';
-    if (name === dateField) {
-      type = dateType;
-    }
-    return {name, type};
-  });
-  return fields;
-}
-
-/**
- * Compares BigQuery schema for matching field names and types.
- *
- * @param {!object} actual Schema to compare against
- * @param {!object} test Schema to check validity of
- * @return {boolean} Whether schema matches
- */
-function compareSchema(actual, test) {
-  if (actual.length !== test.length) {
-    return false;
-  }
-  for (const i in test) {
-    if (
-      !test[i] ||
-      actual[i].name !== test[i].name ||
-      actual[i].type !== test[i].type
-    ) {
-      return false;
-    }
-  }
-  return true;
-}
-
-/**
- * Builds the BigQuery query to lookback for a given path and date info.
- *
- * @param {string} path Table path
- * @param {string} dateField Date field
- * @param {string} dateType Date type
- * @return {string} Lookback query
- */
-function buildLookbackQuery(path, dateField, dateType) {
-  let query;
-  switch (dateType) {
-    case 'DATE':
-      query = `
-        SELECT DISTINCT ${dateField}
-        FROM \`${path}\`
-        ORDER BY ${dateField} DESC
-        LIMIT ${LOOKBACK_DAYS}
-      `;
-      break;
-    case 'DATETIME':
-      query = `
-        SELECT DISTINCT DATE(${dateField}) AS ${dateField}
-        FROM \`${path}\`
-        ORDER BY ${dateField} DESC
-        LIMIT ${LOOKBACK_DAYS}
-      `;
-      break;
-  }
-  return query;
-}
-
-/**
- * Generates lookback dates relative to the provided one.
- *
- * @param {!DateTime} fromDate Starting date for lookback
- * @param {number} numDays Number of days to lookback
- * @param {string=} dateFormat Format string for date
- * @return {!Set} Lookback date strings
- */
-function getLookbackDates(fromDate, numDays) {
-  const lookbackDates = new Set();
-  for (let days = 1; days <= numDays; ++days) {
-    const date = fromDate.minus({days}).toFormat(DATE_FORMAT);
-    lookbackDates.add(date);
-  }
-  return lookbackDates;
-}
-
-/**
- * Decodes a potentially base64 encoded payload.
- *
- * @param {!object} payload Unknown payload
- * @return {!object} JSON payload
- */
-function decodePayload(payload) {
-  if (Buffer.isBuffer(payload)) {
-    return JSON.parse(Buffer.from(payload, 'base64').toString());
-  } else {
-    return payload;
-  }
-}
-
-/**
- * Extracts the relevant CSV lines from a DCM Report.
- */
-class ExtractCSV extends Transform {
-  constructor(fields) {
-    super();
-    this.numFields = fields.length;
-    this.previous = null;
-    this.fieldsFound = false;
-    this.csvFound = false;
-    this.passthrough = false;
-    this.counter = 0;
-  }
-
-  _transform(chunk, enc, done) {
-    if (this.passthrough) {
-      this.push(this.previous);
-      this.push('\n');
-      ++this.counter;
-      this.previous = chunk;
-    } else if (this.csvFound) {
-      // start buffering one line behind
-      this.previous = chunk;
-      this.passthrough = true;
-    } else if (this.fieldsFound) {
-      // store field names
-      const fields = chunk.toString().split(',');
-      info('Report file fields:');
-      log(fields);
-      if (fields.length !== this.numFields) {
-        this.emit('error', Error('CSV fields do not match table schema.'));
-      }
-      this.csvFound = true;
-    } else if (chunk.toString() === REPORT_FIELDS) {
-      // found report fields indicator
-      this.fieldsFound = true;
-    }
-    return done();
-  }
-
-  _flush(done) {
-    if (!this.fieldsFound) {
-      this.emit('error', Error('No CSV fieldnames found.'));
-    } else if (this.counter === 0) {
-      this.emit('error', Error('No CSV lines found.'));
-    } else {
-      info(`Processed ${this.counter} lines.`);
-    }
-    return done();
-  }
-}
-
-/**
- * Logs stream chunks to console as they passthrough.
- */
-class StreamLogger extends Transform {
-  _transform(chunk, enc, done) {
-    console.log(chunk.toString());
-    this.push(chunk);
-    return done();
-  }
-}
-
 async function main(req, h) {
-  // handler function aliases, bound to the hapi `h` handler
-  const reject = (err) => failure(h, err);
-  const resolve = (msg) => success(h, msg);
+  function reject(err) {
+    error(err);
+    return h.response({success: false, message: err.toString()}).code(500);
+  }
+  function resolve(msg) {
+    info(msg);
+    return h.response({success: true, message: msg}).code(200);
+  }
 
   let projectId;
   let emailId;
@@ -464,7 +105,7 @@ async function main(req, h) {
     keyId = credentials.private_key_id;
 
     info(`Waiting for IAM key ${keyId} to be active on GCP.`);
-    await sleep(IAM_PAUSE_MS);
+    await sleep(IAM_SLEEP_MS);
 
     info('Initializing the DCM client.');
     const auth = new GoogleAuth();
@@ -488,6 +129,7 @@ async function main(req, h) {
     const {dateField, dateType} = getDateInfo(reportType);
     const fields = getFields(names, dateField, dateType);
     info(`Report Name: ${reportName}`);
+    info(`Report Type: ${reportType}`);
     info(`Report Fields:`);
     log(fields);
 
@@ -524,12 +166,16 @@ async function main(req, h) {
 
     info('Calculating lookback days.');
     const today = DateTime.utc();
-    const lookbackDates = getLookbackDates(today, LOOKBACK_DAYS);
+    const lookbackDates = getLookbackDates(
+        today,
+        LOOKBACK_DAYS,
+        BQ_DATE_FORMAT
+    );
     info(`Lookback dates: ${[...lookbackDates]}`);
 
     info('Checking ingested dates.');
     const path = `${projectId}.${datasetId}.${tableName}`;
-    const query = buildLookbackQuery(path, dateField, dateType);
+    const query = buildLookbackQuery(path, dateField, dateType, LOOKBACK_DAYS);
     const [rows] = await bq.query(query);
     const ingestedDates = new Set(rows.map((row) => row[dateField].value));
     info(`Ingested dates: ${[...ingestedDates]}`);
@@ -567,13 +213,13 @@ async function main(req, h) {
 
       let latestDate = null;
       for (const item of data.items) {
-        if (item.status === REPORT_AVAILABLE) {
+        if (item.status === DFA_REPORT_AVAILABLE) {
           const reportDate = item.dateRange.endDate;
           if (requiredDates.has(reportDate)) {
             reportFiles[item.id] = item;
             requiredDates.delete(reportDate);
           }
-          latestDate = DateTime.fromFormat(reportDate, DATE_FORMAT);
+          latestDate = DateTime.fromFormat(reportDate, BQ_DATE_FORMAT);
         }
       }
 
@@ -608,14 +254,16 @@ async function main(req, h) {
         const bqOpts = {
           sourceFormat: 'CSV',
           fieldDelimiter: ',',
-          nullMarker: NULL_VALUE,
+          nullMarker: DCM_NULL_VALUE,
         };
+        const csvExtractor = new ExtractCSV(fields, DCM_FIELDS_INDICATOR);
         await pipeline(
             file, // report file
             split(), // split at newlines
-            new ExtractCSV(fields), // extract CSV lines
+            csvExtractor, // extract CSV lines
             table.createWriteStream(bqOpts) // upload to bigquery
         );
+        info(`Processed ${csvExtractor.counter} lines.`);
       } catch (err) {
         error(err);
       }
