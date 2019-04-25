@@ -1,10 +1,18 @@
 {
   "name": "argon",
   "version": "1.0.0",
-  "description": "Campaign Manager Reporting to BigQuery connector",
-  "main": "app.js",
+  "author": "Google Inc.",
+  "license": "Apache-2.0",
+  "description": "Google Marketing Platform Reporting to BigQuery connector",
+  "homepage": "https://github.com/google/argon#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/google/argon.git"
+  },
+  "main": "index.js",
   "engines": {
-    "node": ">=10"
+    "node": ">=10",
+    "npm": ">=6"
   },
   "scripts": {
     "start": "node app.js",
@@ -12,12 +20,11 @@
     "format": "prettier-eslint --write *.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "author": "Google Inc.",
-  "license": "Apache-2.0",
   "dependencies": {
     "@google-cloud/bigquery": "^3.0.0",
+    "body-parser": "^1.18.3",
+    "express": "^4.16.4",
     "google-auth-library": "^3.1.2",
-    "hapi": "^18.1.0",
     "luxon": "^1.12.1",
     "split2": "^3.1.1"
   },

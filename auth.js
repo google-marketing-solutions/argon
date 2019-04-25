@@ -16,10 +16,15 @@
 
 'use strict';
 
-const {auth} = require('google-auth-library');
+const {auth, GoogleAuth} = require('google-auth-library');
 
 const CLOUD_PLATFORM_SCOPE = ['https://www.googleapis.com/auth/cloud-platform'];
 const IAM_BASE_URL = 'https://content-iam.googleapis.com/v1';
+
+async function getProjectId() {
+  const auth = new GoogleAuth();
+  return auth.getProjectId();
+}
 
 /**
  * Creates a key for the service account. This method uses the default
@@ -27,14 +32,10 @@ const IAM_BASE_URL = 'https://content-iam.googleapis.com/v1';
  * has permissions:
  * - iam.serviceAccountKeys.create
  *
- * @param {string} projectId Cloud project ID
  * @param {string} serviceAccount Service account email address
  * @return {!object} Key credentials
  */
-async function createKey(projectId, serviceAccount) {
-  if (!projectId) {
-    throw Error('Provide a valid GCP project ID.');
-  }
+async function createKey(serviceAccount) {
   if (!serviceAccount) {
     throw Error('Provide a service account for key creation.');
   }
@@ -43,7 +44,7 @@ async function createKey(projectId, serviceAccount) {
 
   const url =
     `${IAM_BASE_URL}` +
-    `/projects/${projectId}` +
+    `/projects/-` + // wildcard project ID '-'
     `/serviceAccounts/${serviceAccount}` +
     `/keys`;
   const method = 'POST';
@@ -68,15 +69,11 @@ async function createKey(projectId, serviceAccount) {
  * so make sure it has permissions:
  * - iam.serviceAccountKeys.delete
  *
- * @param {string} projectId Cloud project ID
  * @param {string} serviceAccount Service account email address
  * @param {string} privateKeyId Private key ID to delete
  * @return {!Promise} Deletion request
  */
-async function deleteKey(projectId, serviceAccount, privateKeyId) {
-  if (!projectId) {
-    throw Error('Provide a valid GCP project ID.');
-  }
+async function deleteKey(serviceAccount, privateKeyId) {
   if (!serviceAccount) {
     throw Error('Provide a service account for key deletion.');
   }
@@ -88,7 +85,7 @@ async function deleteKey(projectId, serviceAccount, privateKeyId) {
 
   const url =
     `${IAM_BASE_URL}` +
-    `/projects/${projectId}` +
+    `/projects/-` + // wildcard project ID '-'
     `/serviceAccounts/${serviceAccount}` +
     `/keys/${privateKeyId}`;
   const method = 'DELETE';
@@ -96,4 +93,4 @@ async function deleteKey(projectId, serviceAccount, privateKeyId) {
   return client.request({url, method});
 }
 
-module.exports = {createKey, deleteKey};
+module.exports = {createKey, deleteKey, getProjectId};

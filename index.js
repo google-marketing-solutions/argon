@@ -16,26 +16,6 @@
 
 'use strict';
 
-const express = require('express');
-const bodyParser = require('body-parser');
 const {argon} = require('./argon.js');
 
-const app = express();
-const port = process.env.PORT || 8080;
-const host = '0.0.0.0';
-
-app.use(bodyParser.json());
-app.use(bodyParser.raw());
-
-app.post('/', async function(req, res, next) {
-  try {
-    await argon(req, res);
-    next();
-  } catch (err) {
-    next(err);
-  }
-});
-
-app.listen(port, host, function() {
-  console.log(`Server listening on ${host}:${port}.`);
-});
+exports.argon = argon;
