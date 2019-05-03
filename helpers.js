@@ -18,8 +18,14 @@
 
 const {Transform} = require('stream');
 
+const {buildSchema, compareSchema} = require('./bq.js');
+
 function log(thing) {
-  console.dir(thing, {depth: null});
+  console.dir(thing, {
+    depth: null,
+    maxArrayLength: null,
+    showHidden: true,
+  });
 }
 
 function info(msg) {
@@ -86,6 +92,57 @@ class StreamLogger extends Transform {
   }
 }
 
+class CSVExtractorBase extends Transform {
+  constructor({table, tableSchema, dateField, dateType}) {
+    super();
+    this.table = table;
+    this.tableSchema = tableSchema;
+    this.dateField = dateField;
+    this.dateType = dateType;
+    this.counter = 0;
+  }
+
+  pushLine(chunk) {
+    this.push(chunk);
+    this.push('\n');
+    ++this.counter;
+  }
+
+  _flush(done) {
+    if (this.counter === 0) {
+      this.emit('error', Error('No CSV lines found.'));
+    }
+    return done();
+  }
+
+  handleFields(names) {
+    info('Report Schema:');
+    const reportSchema = buildSchema(names, this.dateField, this.dateType);
+    log(reportSchema);
+
+    if (this.tableSchema) {
+      return this.checkSchema(reportSchema);
+    } else {
+      return this.createTable(reportSchema);
+    }
+  }
+
+  createTable(schema) {
+    info('Creating BigQuery Table.');
+    return this.table.create({schema}).then(([_, metadata]) => {
+      this.tableSchema = metadata.schema;
+    });
+  }
+
+  async checkSchema(schema) {
+    info('Checking schemas for consistency.');
+    const schemaMatches = compareSchema(this.tableSchema, schema);
+    if (schemaMatches) {
+      this.emit('error', Error('Schema does not match.'));
+    }
+  }
+}
+
 module.exports = {
   decodePayload,
   error,
@@ -94,5 +151,6 @@ module.exports = {
   log,
   sleep,
   warn,
+  CSVExtractorBase,
   StreamLogger,
 };

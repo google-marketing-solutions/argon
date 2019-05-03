@@ -18,7 +18,7 @@ runtime: nodejs10
 manual_scaling:
   instances: 1
 resources:
-  memory_gb: 0.25
+  memory_gb: 0.5
 
 handlers:
 - url: /.*

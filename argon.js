@@ -27,12 +27,6 @@ const pipeline = util.promisify(pipeline_);
 const {createKey, deleteKey, getProjectId} = require('./auth.js');
 const {buildLookbackQuery, buildValidBQName} = require('./bq.js');
 const {
-  getClient,
-  getReportMetadata,
-  getReports,
-  ExtractCSV,
-} = require('./dcm.js');
-const {
   decodePayload,
   error,
   getLookbackDates,
@@ -51,7 +45,7 @@ const DEFAULT_DATE_TYPE = 'DATE';
 
 const BQ_DATE_FORMAT = 'yyyy-MM-dd';
 
-const DCM_NULL_VALUE = '(not set)';
+const NULL_VALUE = '(not set)';
 
 async function argon(req, res) {
   info(`Connector started.`);
@@ -76,10 +70,22 @@ async function argon(req, res) {
       throw Error('Provide a POST body.');
     }
 
+    const product = payload.product;
+    info(`Product: ${product}`);
+    if (!product) {
+      throw Error('Provide Marketing Platform product - DV or CM.');
+    }
+    const {
+      getClient,
+      getReportName,
+      getReports,
+      CSVExtractor,
+    } = require(`./${product.toLowerCase()}.js`);
+
     const reportId = payload.reportId;
     info(`Report ID: ${reportId}`);
     if (!reportId) {
-      throw Error('Provide Campaign Manager Report ID.');
+      throw Error('Provide Report ID.');
     }
 
     const datasetName = payload.datasetName;
@@ -90,8 +96,8 @@ async function argon(req, res) {
 
     const profileId = payload.profileId;
     info(`Profile ID: ${profileId}`);
-    if (!profileId) {
-      throw Error('Provide Campaign Manager Profile ID.');
+    if (product === 'CM' && !profileId) {
+      throw Error('Provide User Profile ID.');
     }
 
     const lookbackDays = payload.lookbackDays || DEFAULT_LOOKBACK_DAYS;
@@ -120,15 +126,15 @@ async function argon(req, res) {
       await sleep(IAM_SLEEP_MS);
     }
 
-    info('Initializing the Campaign Manager client.');
+    info('Initializing the API client.');
     const client = await getClient(credentials);
 
     info(`Checking for existence of Report ${reportId}.`);
-    const checkData = await getReportMetadata(client, profileId, reportId);
-    if (!checkData) {
+    const reportName = await getReportName({client, profileId, reportId});
+    if (!reportName) {
       throw Error('Report not found.');
     }
-    log(checkData);
+    info(`Report Name: ${reportName}`);
 
     info('Initializing the BigQuery client.');
     const projectId = await getProjectId();
@@ -141,7 +147,7 @@ async function argon(req, res) {
       throw Error('Dataset not found.');
     }
 
-    const tableName = buildValidBQName(checkData.name);
+    const tableName = buildValidBQName(reportName);
     info(`Checking for existence of Table ${tableName}.`);
     const table = dataset.table(tableName);
     const [tableExists] = await table.exists();
@@ -186,15 +192,15 @@ async function argon(req, res) {
       return resolve('No dates left to ingest.');
     }
 
-    info('Enumerating DCM reports.');
-    const reports = await getReports(
-        client,
-        profileId,
-        reportId,
-        requiredDates,
-        lookbackDays,
-        BQ_DATE_FORMAT
-    );
+    info('Enumerating report files.');
+    const reports = await getReports({
+      client,
+      profileId,
+      reportId,
+      requiredDates,
+      lookbackDays,
+      dateFormat: BQ_DATE_FORMAT,
+    });
 
     warn(`Unresolved dates: ${[...requiredDates]}`);
 
@@ -203,8 +209,8 @@ async function argon(req, res) {
     }
 
     info('Ingesting reports.');
-    for (const [fileId, {url, date}] of Object.entries(reports)) {
-      info(`Fetching report file ${fileId} for ${date}.`);
+    for (const [date, {url, file}] of Object.entries(reports)) {
+      info(`Fetching report file ${file} for ${date}.`);
       try {
         const fileOpts = {responseType: 'stream'};
         const {data: file} = await client.request({url, ...fileOpts});
@@ -217,22 +223,28 @@ async function argon(req, res) {
         const bqOpts = {
           sourceFormat: 'CSV',
           fieldDelimiter: ',',
-          nullMarker: DCM_NULL_VALUE,
+          nullMarker: NULL_VALUE,
         };
-        const extractCSV = new ExtractCSV(
-            table,
-            tableSchema,
-            dateField,
-            dateType
-        );
-        await pipeline(
-            file,
-            split(),
-            extractCSV,
-            table.createWriteStream(bqOpts)
-        );
-        info(`Processed ${extractCSV.counter} lines.`);
-        tableSchema = extractCSV.tableSchema;
+        const extractCSV = new CSVExtractor({
+          table,
+          tableSchema,
+          dateField,
+          dateType,
+        });
+        try {
+          await pipeline(
+              file,
+              split(),
+              extractCSV,
+              table.createWriteStream(bqOpts)
+          );
+        } catch (e) {
+          throw e;
+        } finally {
+          info(`Processed ${extractCSV.counter} lines.`);
+          // pull in tableSchema from processed report
+          tableSchema = extractCSV.tableSchema;
+        }
       } catch (err) {
         error(err);
       }

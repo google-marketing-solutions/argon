@@ -89,7 +89,7 @@ function buildLookbackQuery(path, dateField, dateType, numDays) {
 }
 
 /**
- * Builds a valid BQ name from a given name.
+ * Builds a valid BigQuery name from a given name.
  *
  * @param {string} name Raw name
  * @return {string} Valid name

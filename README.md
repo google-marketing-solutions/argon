@@ -1,11 +1,13 @@
-# argon
+# Argon
 
 ***This is not an officially supported Google product.***
 
-This middleware allows Campaign Manager reports to be ingested into BigQuery
-datasets. It can be deployed on AppEngine or Cloud Functions, and handles its
-own authentication and cleanup. Jobs are triggered by issuing POST calls, which
-allows for use with Cloud Scheduler.
+This middleware automates the import of both Campaign Manager (CM) and
+Display & Video 360 (DV) Offline Reporting files into BigQuery. It can be
+deployed onto [App Engine](https://cloud.google.com/appengine/) or
+[Cloud Functions](https://cloud.google.com/functions/). You can trigger
+jobs by issuing POST calls with configured JSON, which allows for use
+with [Cloud Scheduler](https://cloud.google.com/scheduler/).
 
 ## Reports
 
@@ -19,43 +21,45 @@ There are some restrictions on the reports that Argon can handle:
 ## Usage
 
 *   Setup a Google Cloud project.
-*   Create the BigQuery dataset.
-*   Ensure that the "DCM/DFA Reporting And Trafficking API" is enabled in the
-    GCP API console, or: `sh gcloud services enable dfareporting.googleapis.com`
-*   Grant IAM admin rights to the default service account.
-*   Create a new service account with BigQuery admin rights.
-*   Create a Campaign Manager profile with the service account's email address.
-*   Ensure that this account is granted a role with permissions to "View all
-    generated files" and "View all saved reports".
-*   Deploy to either App Engine or Cloud Functions, with a suggested minimum
-    memory resource of 0.25 GB.
-*   POST to the AppEngine / Cloud Function endpoint with:
+*   Create a BigQuery dataset - the tables will be created automatically per report.
+*   Create a new service account to be used with Argon.
+*   Create a profile with the service account's email address on CM / DV.
+*   Use these roles for the profile:
+    *   DV: Reporting only
+    *   CM: Advanced Agency Admi​n, with:
+        *   View all generated files
+        *   View all saved reports
+*   Enable the necessary APIs in API Explorer, or via `gcloud services enable` :
+    *   DV: DoubleClick Bid Manager API ( `doubleclickbidmanager.googleapis.com` )
+    *   CM: DCM/DFA Reporting And Trafficking API ( `dfareporting.googleapis.com` )
+*   Enable these roles for your service accounts:
+    *   App Engine default: Service Account Key Admin
+    *   Argon: BigQuery Admin
+*   Deploy Argon code to the required product:
+    *   App Engine: `gcloud app deploy app.yaml`
+    *   Cloud Functions:
+        ```
+        gcloud functions deploy argon \
+            --runtime nodejs10 \
+            --memory 512MB \
+            --timeout 540s \
+            --trigger-http
+        ```
+*   POST to the endpoint with a correctly configured JSON body:
+    * App Engine: `https://[SERVICE]-dot-[PROJECT].appspot.com`
+    * Cloud Function: `https://[REGION]-[PROJECT].cloudfunctions.net/argon`
     ```json5
     {
-        "profileId": [DCM_PROFILE_ID],
-        "reportId": [DCM_REPORT_ID],
-        "datasetName": "[BIGQUERY_DATASET_NAME]",
-        "emailId": "[SERVICE_ACCOUNT_EMAIL_ADDRESS]", // default: Use from environment
-        "lookbackDays": [NUM_OF_DAYS], // default: 7
-        "dateFields": [DATE_FIELD], // default: 'Date'
-        "dateType": [DATE_BQ_TYPE] // default: 'DATE'
+        "product": [PRODUCT],           // CM or DV
+        "reportId": [REPORT_ID],
+        "profileId": [PROFILE_ID],      // only for CM
+        "datasetName": "[DATASET_NAME]",
+        "emailId": "[SERVICE_ACCOUNT]",
+        "lookbackDays": [NUM_OF_DAYS],  // default: 7
+        "dateField": "[DATE_FIELD]",    // default: Date
+        "dateType": "[DATE_TYPE]"       // DATE or DATETIME
     }
     ```
-
-## Deployment
-
-```sh
-# App Engine
-gcloud app deploy
-
-# Cloud Function
-gcloud functions deploy argon \
-    --runtime nodejs10 \
-    --memory 256MB \
-    --timeout 540s \
-    --trigger-http \
-    --service-account "[SERVICE_ACCOUNT_EMAIL_ADDRESS]"
-```
 
 ## Development
 
