@@ -1,6 +1,6 @@
 {
   "name": "argon",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "author": "Google Inc.",
   "license": "Apache-2.0",
   "description": "Google Marketing Platform Reporting to BigQuery connector",
@@ -18,8 +18,7 @@
     "start": "node app.js",
     "dev": "nodemon app.js",
     "format": "prettier-eslint --write *.js",
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "dv": "nodemon dv.js"
+    "test": "echo 'Error: No tests defined' && exit 1"
   },
   "dependencies": {
     "@google-cloud/bigquery": "^3.0.0",
@@ -32,7 +31,7 @@
   "devDependencies": {
     "eslint": "^5.16.0",
     "eslint-config-google": "^0.12.0",
-    "nodemon": "^1.18.11",
+    "nodemon": "^1.19.0",
     "prettier": "^1.17.0",
     "prettier-eslint": "^8.8.2",
     "prettier-eslint-cli": "^4.7.1"

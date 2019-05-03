@@ -21,17 +21,17 @@ There are some restrictions on the reports that Argon can handle:
 ## Usage
 
 *   Setup a Google Cloud project.
-*   Create a BigQuery dataset - the tables will be created automatically per report.
+*   Create a BigQuery dataset - tables will be created automatically per report.
 *   Create a new service account to be used with Argon.
 *   Create a profile with the service account's email address on CM / DV.
 *   Use these roles for the profile:
     *   DV: Reporting only
-    *   CM: Advanced Agency Admi​n, with:
+    *   CM: Advanced Agency Admin, with:
         *   View all generated files
         *   View all saved reports
 *   Enable the necessary APIs in API Explorer, or via `gcloud services enable` :
-    *   DV: DoubleClick Bid Manager API ( `doubleclickbidmanager.googleapis.com` )
-    *   CM: DCM/DFA Reporting And Trafficking API ( `dfareporting.googleapis.com` )
+    *   DV: DoubleClick Bid Manager API (`doubleclickbidmanager.googleapis.com`)
+    *   CM: DCM/DFA Reporting And Trafficking API (`dfareporting.googleapis.com`)
 *   Enable these roles for your service accounts:
     *   App Engine default: Service Account Key Admin
     *   Argon: BigQuery Admin
