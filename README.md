@@ -18,6 +18,9 @@ There are some restrictions on the reports that Argon can handle:
 *   Dimensions: "Date" or "Activity Date/Time", is mandatory
 *   Share with: Service Account email address, by link
 
+Note: Report files generated prior to adding the service account can
+only be imported in CM, but not in DV360.
+
 ## Usage
 
 *   Setup a Google Cloud project.
@@ -50,7 +53,7 @@ There are some restrictions on the reports that Argon can handle:
     * Cloud Function: `https://[REGION]-[PROJECT].cloudfunctions.net/argon`
     ```json5
     {
-        "product": [PRODUCT],           // CM or DV
+        "product": "[PRODUCT]",         // CM or DV
         "reportId": [REPORT_ID],
         "profileId": [PROFILE_ID],      // only for CM
         "datasetName": "[DATASET_NAME]",
