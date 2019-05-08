@@ -131,13 +131,15 @@ class CSVExtractorBase extends Transform {
     info('Creating BigQuery Table.');
     return this.table.create({schema}).then(([_, metadata]) => {
       this.tableSchema = metadata.schema;
+      info('BigQuery Table Schema:');
+      log(this.tableSchema);
     });
   }
 
   async checkSchema(schema) {
     info('Checking schemas for consistency.');
     const schemaMatches = compareSchema(this.tableSchema, schema);
-    if (schemaMatches) {
+    if (!schemaMatches) {
       this.emit('error', Error('Schema does not match.'));
     }
   }
