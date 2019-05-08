@@ -25,13 +25,25 @@
  * @return {!object} Schema definition
  */
 function buildSchema(names, dateField, dateType) {
+  const usedNames = new Set();
+
   const fields = names.map((name) => {
     const validName = buildValidBQName(name);
+
+    let fieldName = validName;
+    let i = 1;
+    while (usedNames.has(fieldName)) {
+      fieldName = `${validName}_${i}`;
+      ++i;
+    }
+    usedNames.add(fieldName);
+
     let type = 'STRING';
     if (validName === dateField) {
       type = dateType;
     }
-    return {name: validName, type};
+
+    return {name: fieldName, type};
   });
   return {fields};
 }
