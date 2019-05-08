@@ -19,7 +19,7 @@ There are some restrictions on the reports that Argon can handle:
 *   Share with: Service Account email address, by link
 
 Note: Report files generated prior to adding the service account can
-only be imported in CM, but not in DV360.
+only be imported from CM, but not from DV360.
 
 ## Usage
 
