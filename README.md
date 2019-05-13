@@ -57,12 +57,17 @@ only be imported from CM, but not from DV360.
         "reportId": [REPORT_ID],
         "profileId": [PROFILE_ID],      // only for CM
         "datasetName": "[DATASET_NAME]",
-        "emailId": "[SERVICE_ACCOUNT]",
+        "emailId": "[SERVICE_ACCOUNT]", // default: environment credentials
         "lookbackDays": [NUM_OF_DAYS],  // default: 7
         "dateField": "[DATE_FIELD]",    // default: Date
-        "dateType": "[DATE_TYPE]"       // DATE or DATETIME
+        "dateType": "[DATE_TYPE]",      // DATE or DATETIME
+        "projectId": "[PROJECT_ID]"     // default: current cloud project
     }
     ```
+*   Notes:
+    *   Adjust `lookbackDays` to ingest historical report files
+    *   Set `projectId` if the output BigQuery dataset lives elsewhere
+    *   Leave `emailId` empty to use the Cloud Function's service account
 
 ## Development
 

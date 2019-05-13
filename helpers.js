@@ -115,19 +115,23 @@ class CSVExtractorBase extends Transform {
     return done();
   }
 
-  handleFields(names) {
+  async handleFields(names) {
     info('Report Schema:');
     const reportSchema = buildSchema(names, this.dateField, this.dateType);
     log(reportSchema);
 
     if (this.tableSchema) {
-      return this.checkSchema(reportSchema);
+      return this.checkSchema(reportSchema).then(this.indicateProcessing);
     } else {
-      return this.createTable(reportSchema);
+      return this.createTable(reportSchema).then(this.indicateProcessing);
     }
   }
 
-  createTable(schema) {
+  async indicateProcessing() {
+    info('Processing CSV lines.');
+  }
+
+  async createTable(schema) {
     info('Creating BigQuery Table.');
     return this.table.create({schema}).then(([_, metadata]) => {
       this.tableSchema = metadata.schema;

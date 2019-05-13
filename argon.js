@@ -113,10 +113,17 @@ async function argon(req, res) {
     emailId = payload.emailId;
     info(`Email Address: ${emailId}`);
 
+    let projectId = payload.projectId;
+    if (!projectId) {
+      projectId = await getProjectId();
+    }
+    info(`Project ID: ${projectId}`);
+
     let credentials;
     if (!emailId) {
       info('Using environment credentials.');
       credentials = null;
+      keyId = null;
     } else {
       info(`Creating IAM key credentials.`);
       credentials = await createKey(emailId);
@@ -137,7 +144,6 @@ async function argon(req, res) {
     info(`Report Name: ${reportName}`);
 
     info('Initializing the BigQuery client.');
-    const projectId = await getProjectId();
     const bq = await new BigQuery({projectId, credentials});
 
     info(`Checking for existence of Dataset ${datasetName}.`);

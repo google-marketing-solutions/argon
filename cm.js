@@ -52,6 +52,7 @@ async function getReports({
   const today = DateTime.utc();
   const reports = {};
   let nextPageToken = '';
+  const seenFileIds = new Set();
 
   do {
     const url =
@@ -78,6 +79,17 @@ async function getReports({
 
     let latestDate = null;
     for (const report of response.data.items) {
+      // TODO: Remove when API bug is fixed
+      // DCM API returns the final page infinitely
+      // It contains the same items, but a new page token
+      // So, track file ids and terminate when we see a repeat
+      if (seenFileIds.has(report.id)) {
+        nextPageToken = '';
+        break;
+      } else {
+        seenFileIds.add(report.id);
+      }
+
       if (report.status === REPORT_AVAILABLE) {
         const reportDate = report.dateRange.endDate;
         if (requiredDates.delete(reportDate)) {
