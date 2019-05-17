@@ -29,10 +29,10 @@ const REPORTING_BASE_URL =
 
 const REPORT_AVAILABLE = 'DONE';
 const GCS_URL_PATTERN = /(.*)\/(?<filename>.*)_(.*)_(.*)_(.*)_(.*)\.csv\?(.*)/;
-const DATE_PATTERN = /,(\d{4})\/(\d{2})\/(\d{2}),/;
+const DATE_PATTERN = /(\d{4})\/(\d{2})\/(\d{2})/;
 
 function convertDate(line) {
-  return line.replace(DATE_PATTERN, ',$1-$2-$3,');
+  return line.replace(new RegExp(DATE_PATTERN, 'g'), '$1-$2-$3');
 }
 
 function extractFilename(url) {
@@ -54,6 +54,14 @@ async function getClient(credentials) {
 async function getReportName({client, reportId}) {
   const url = `${REPORTING_BASE_URL}/queries/${reportId}/reports`;
   const response = await client.request({url});
+  if (
+    !response.data ||
+    !response.data.reports ||
+    response.data.reports.length === 0
+  ) {
+    throw Error('Invalid or empty API response.');
+  }
+
   let fileUrl = '';
   for (const report of response.data.reports) {
     if (report.metadata.status.state === REPORT_AVAILABLE) {
