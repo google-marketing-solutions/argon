@@ -38,6 +38,9 @@ async function getReportName({client, profileId, reportId}) {
     `/userprofiles/${profileId}` +
     `/reports/${reportId}`;
   const response = await client.request({url});
+  if (!response.data || !response.data.name) {
+    throw Error('Invalid or empty API response.');
+  }
   return response.data.name;
 }
 
