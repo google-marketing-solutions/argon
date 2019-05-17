@@ -35,6 +35,7 @@ const {
   sleep,
   warn,
 } = require('./helpers.js');
+const packageSpec = require('./package.json');
 
 // Constants
 const IAM_SLEEP_MS = 1000;
@@ -48,7 +49,7 @@ const BQ_DATE_FORMAT = 'yyyy-MM-dd';
 const NULL_VALUE = '(not set)';
 
 async function argon(req, res) {
-  info(`Connector started.`);
+  info(`Connector version: ${packageSpec.version}`);
 
   // response handlers
   function reject(err) {
