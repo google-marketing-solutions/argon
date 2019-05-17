@@ -12,13 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-service: argon
+service: default
 runtime: nodejs10
 
 manual_scaling:
   instances: 1
 resources:
+  cpu: 1
   memory_gb: 0.5
+  disk_size_gb: 10
 
 handlers:
 - url: /.*
