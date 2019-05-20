@@ -1,6 +1,6 @@
 # Argon
 
-***This is not an officially supported Google product.***
+**Please note: this is not an officially supported Google product.**
 
 This middleware automates the import of both Campaign Manager (CM) and
 Display & Video 360 (DV) Offline Reporting files into BigQuery. It can be
@@ -21,7 +21,7 @@ with [Cloud Scheduler](https://cloud.google.com/scheduler/).
 *   Enable the necessary APIs in API Explorer, or via `gcloud services enable` :
     *   DV: DoubleClick Bid Manager API (`doubleclickbidmanager.googleapis.com`)
     *   CM: DCM/DFA Reporting And Trafficking API (`dfareporting.googleapis.com`)
-*   Deploy Argon code to the required product:
+*   Clone this repository and deploy Argon code to the required product:
     *   App Engine: `gcloud app deploy app.yaml`
     *   Cloud Functions:
         ```
@@ -68,7 +68,7 @@ Always create a new Report, if you want to change the data you need.
     far-off in the future "Expiry" date.
 *   Save (and do not run) the report.
 
-#### Google Cloud Scheduler:
+### Google Cloud Scheduler:
 
 *   Create a Scheduler Job with:
     *   Frequency: `0 */12 * * *` (repeating every 12 hours)
@@ -102,6 +102,7 @@ Always create a new Report, if you want to change the data you need.
     historical data file.
 *   If it fails, check the logs for error messages and ensure all the above
     steps have been appropriately followed, with the correct permissions.
+*   Moving forward, Cloud Scheduler will trigger Argon for regular ingestion.
 
 ## Development
 
