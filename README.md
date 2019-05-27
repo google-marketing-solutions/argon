@@ -4,10 +4,9 @@
 
 This middleware automates the import of both Campaign Manager (CM) and
 Display & Video 360 (DV) Offline Reporting files into BigQuery. It can be
-deployed onto [App Engine](https://cloud.google.com/appengine/) or
-[Cloud Functions](https://cloud.google.com/functions/). You can trigger
-jobs by issuing POST calls with configured JSON, which allows for use
-with [Cloud Scheduler](https://cloud.google.com/scheduler/).
+deployed onto [Cloud Functions](https://cloud.google.com/functions/). You
+can trigger jobs by issuing POST calls with configured JSON, which allows
+for use with [Cloud Scheduler](https://cloud.google.com/scheduler/).
 
 ## Setup
 
@@ -16,22 +15,18 @@ with [Cloud Scheduler](https://cloud.google.com/scheduler/).
 *   Setup a Google Cloud project.
 *   Create a BigQuery dataset - tables will be created automatically per report.
 *   Create a new IAM Service Account for Argon, with the BigQuery Admin role.
-*   Additional step for App Engine: Grant the "Service Account Key Admin" role
-    to the "App Engine default service account".
 *   Enable the necessary APIs in API Explorer, or via `gcloud services enable` :
     *   DV: DoubleClick Bid Manager API (`doubleclickbidmanager.googleapis.com`)
     *   CM: DCM/DFA Reporting And Trafficking API (`dfareporting.googleapis.com`)
-*   Clone this repository and deploy Argon code to the required product:
-    *   App Engine: `gcloud app deploy app.yaml`
-    *   Cloud Functions:
-        ```
-        gcloud functions deploy argon \
-            --runtime nodejs10 \
-            --memory 512MB \
-            --timeout 540s \
-            --trigger-http \
-            --service-account "[SERVICE_ACCOUNT_EMAIL]"
-        ```
+*   Clone this repository and deploy Argon code to your cloud project:
+    ```
+    gcloud functions deploy argon \
+        --runtime nodejs10 \
+        --memory 512MB \
+        --timeout 540s \
+        --trigger-http \
+        --service-account "[SERVICE_ACCOUNT_EMAIL]"
+    ```
 
 ### Google Marketing Platform:
 
@@ -49,19 +44,19 @@ with [Cloud Scheduler](https://cloud.google.com/scheduler/).
 
 #### Report:
 
-Note: Argon does not support pre-existing reports, as they can cause issues.
-Kindly create a new report as detailed below, and do not change the
-Dimension/Metrics/Events selections once Argon has started ingesting files.
-Always create a new Report, if you want to change the data you need.
+Note: Argon does not support pre-existing reports, as they can cause
+hard-to-debug issues. Kindly create a new report as detailed below, and
+do not change the Dimension/Metrics/Events selections once Argon has
+started ingesting files. Always create a new Report, if you want to
+change the data or values you need.
 
 *   Choose the necessary report template in "Offline Reporting".
 *   Choose the "CSV" File type.
-*   Ensure a "Date" or "Activity Date/Time" field is selected in Dimensions.
 *   Select the required Dimensions, Metrics, and Rich Media Events.
 *   Add the service account's email address to the "Share with > +add people",
     and use the "Link" option.
-*   If you want historical data to be ingested for the first time,
-    select the appropriate Date Range of "Last N days".
+*   If you want historical data to be backfilled for the first time,
+    select the appropriate backfill Date Range with "Custom".
 *   Save and run the report.
 *   Now, edit the report again, and select a Date Range of "Yesterday".
 *   Activate the Schedule for repeats "Daily" every "1 day" and choose a
@@ -73,33 +68,23 @@ Always create a new Report, if you want to change the data you need.
 *   Create a Scheduler Job with:
     *   Frequency: `0 */12 * * *` (repeating every 12 hours)
     *   Target: HTTP
-    *   URL:
-        * App Engine: `https://[SERVICE]-dot-[PROJECT].appspot.com`
-        * Cloud Function: `https://[REGION]-[PROJECT].cloudfunctions.net/argon`
+    *   URL: `https://[REGION]-[PROJECT].cloudfunctions.net/argon`
     *   HTTP Method: POST
     *   Body:
         ```json5
         {
-            "product": "[PRODUCT]",         // required: CM or DV
+            "product": "[PRODUCT]",           // required: CM or DV
             "reportId": [REPORT_ID],
-            "profileId": [PROFILE_ID],      // only for CM
+            "profileId": [PROFILE_ID],        // only for CM
             "datasetName": "[DATASET_NAME]",
-            "emailId": "[SERVICE_ACCOUNT]", // only for AppEngine
-            "lookbackDays": [NUM_OF_DAYS],  // default: 7
-            "dateField": "[DATE_FIELD]",    // default: Date
-            "dateType": "[DATE_TYPE]",      // default: DATE, or DATETIME
-            "projectId": "[PROJECT_ID]"     // default: current cloud project
+            "projectId": "[BIGQUERY_PROJECT]" // default: current cloud project
         }
         ```
-        *   Notes:
-            *   `lookbackDays` - A lookback window, in case a particular
-                report file is missed or fails to ingest.
-            *   `projectId` - Use if the output BigQuery dataset lives
-                outside the currently deployed cloud project.
-            *   `dateField` & `dateType` - Usually `Date` & `DATE`
-                or `Activity Date/Time` & `DATETIME`.
+    *   Notes:
+        *   Use `projectId` if the output BigQuery dataset lives outside the
+            currently deployed cloud project.
 *   Save the job and run once to ingest the initially generated
-    historical data file.
+    backfill historical data file.
 *   If it fails, check the logs for error messages and ensure all the above
     steps have been appropriately followed, with the correct permissions.
 *   Moving forward, Cloud Scheduler will trigger Argon for regular ingestion.

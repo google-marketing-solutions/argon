@@ -16,7 +16,6 @@
 
 'use strict';
 
-const {DateTime} = require('luxon');
 const {GoogleAuth} = require('google-auth-library');
 
 const {CSVExtractorBase} = require('./helpers.js');
@@ -44,16 +43,9 @@ async function getReportName({client, profileId, reportId}) {
   return response.data.name;
 }
 
-async function getReports({
-  client,
-  profileId,
-  reportId,
-  requiredDates,
-  lookbackDays,
-  dateFormat,
-}) {
-  const today = DateTime.utc();
-  const reports = {};
+async function getReports({client, profileId, reportId, ingestedIds}) {
+  const reports = new Map();
+
   let nextPageToken = '';
   const seenFileIds = new Set();
 
@@ -80,34 +72,24 @@ async function getReports({
     }
     nextPageToken = response.data.nextPageToken;
 
-    let latestDate = null;
     for (const report of response.data.items) {
       // TODO: Remove when API bug is fixed
       // DCM API returns the final page infinitely
       // It contains the same items, but a new page token
       // So, track file ids and terminate when we see a repeat
-      if (seenFileIds.has(report.id)) {
+      const fileId = report.id;
+      if (seenFileIds.has(fileId)) {
         nextPageToken = '';
         break;
       } else {
-        seenFileIds.add(report.id);
+        seenFileIds.add(fileId);
       }
 
       if (report.status === REPORT_AVAILABLE) {
-        const reportDate = report.dateRange.endDate;
-        if (requiredDates.delete(reportDate)) {
-          reports[reportDate] = {url: report.urls.apiUrl, file: report.id};
+        if (!ingestedIds.has(fileId)) {
+          reports.set(fileId, report.urls.apiUrl);
         }
-        latestDate = DateTime.fromFormat(reportDate, dateFormat);
       }
-    }
-
-    if (requiredDates.length === 0) {
-      break; // no required dates remaining
-    } else if (latestDate === null) {
-      continue; // no generated reports on this page
-    } else if (today.diff(latestDate).as('days') > lookbackDays) {
-      break; // exceeded lookback window
     }
   } while (nextPageToken !== '');
 

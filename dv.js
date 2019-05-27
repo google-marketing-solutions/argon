@@ -16,7 +16,6 @@
 
 'use strict';
 
-const {DateTime} = require('luxon');
 const {GoogleAuth} = require('google-auth-library');
 
 const {CSVExtractorBase} = require('./helpers.js');
@@ -32,7 +31,7 @@ const GCS_URL_PATTERN = /(.*)\/(?<filename>.*)_(.*)_(.*)_(.*)_(.*)\.csv\?(.*)/;
 const DATE_PATTERN = /(\d{4})\/(\d{2})\/(\d{2})/;
 
 function convertDate(line) {
-  return line.replace(new RegExp(DATE_PATTERN, 'g'), '$1-$2-$3');
+  return line.replace(DATE_PATTERN, '$1-$2-$3');
 }
 
 function extractFilename(url) {
@@ -72,15 +71,8 @@ async function getReportName({client, reportId}) {
   return extractFilename(fileUrl);
 }
 
-async function getReports({
-  client,
-  reportId,
-  requiredDates,
-  lookbackDays,
-  dateFormat,
-}) {
-  const today = DateTime.utc();
-  const reports = {};
+async function getReports({client, reportId, ingestedIds}) {
+  const reports = new Map();
 
   const url = `${REPORTING_BASE_URL}/queries/${reportId}/reports`;
   const response = await client.request({url});
@@ -92,28 +84,12 @@ async function getReports({
     throw Error('Invalid or empty API response.');
   }
 
-  let latestDate = null;
   for (const report of response.data.reports) {
     if (report.metadata.status.state === REPORT_AVAILABLE) {
-      const reportTimestamp = DateTime.fromMillis(
-          Number.parseInt(report.metadata.reportDataEndTimeMs)
-      );
-      const reportDate = reportTimestamp.toFormat(dateFormat);
-      if (requiredDates.delete(reportDate)) {
-        reports[reportDate] = {
-          url: report.metadata.googleCloudStoragePath,
-          file: report.key.reportId,
-        };
+      const fileId = report.key.reportId;
+      if (!ingestedIds.has(fileId)) {
+        reports.set(fileId, report.metadata.googleCloudStoragePath);
       }
-      latestDate = reportTimestamp;
-    }
-
-    if (requiredDates.length === 0) {
-      break; // no required dates remaining
-    } else if (latestDate === null) {
-      break; // no generated reports found
-    } else if (today.diff(latestDate).as('days') > lookbackDays) {
-      break; // exceeded lookback window
     }
   }
 

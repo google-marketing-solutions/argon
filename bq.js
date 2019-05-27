@@ -17,15 +17,17 @@
 'use strict';
 
 /**
- * Builds a BigQuery table schema from field names and date info.
+ * Builds a BigQuery table schema from field names, and inserts
+ * the file ID column for lookback tracking.
  *
  * @param {!array} names Field names
- * @param {string} dateField Date field name
- * @param {string} dateType Date field type
  * @return {!object} Schema definition
  */
-function buildSchema(names, dateField, dateType) {
+function buildSchema(names) {
   const usedNames = new Set();
+
+  // Add File ID to columns
+  names.push(FILE_ID_COLUMN);
 
   const fields = names.map((name) => {
     const validName = buildValidBQName(name);
@@ -38,13 +40,9 @@ function buildSchema(names, dateField, dateType) {
     }
     usedNames.add(fieldName);
 
-    let type = 'STRING';
-    if (validName === dateField) {
-      type = dateType;
-    }
-
-    return {name: fieldName, type};
+    return {name: fieldName, type: 'STRING'};
   });
+
   return {fields};
 }
 
@@ -74,29 +72,15 @@ function compareSchema(left, right) {
 }
 
 /**
- * Builds a BigQuery query to lookback for a given path and date info.
+ * Builds a BigQuery query to lookback file IDs for a given path.
  *
  * @param {string} path BigQuery table path
- * @param {string} dateField Date field name
- * @param {string} dateType Date field type
- * @param {number} numDays Number of days to loockback
  * @return {string} Query string
  */
-function buildLookbackQuery(path, dateField, dateType, numDays) {
-  let selectQ;
-  switch (dateType) {
-    case 'DATE':
-      selectQ = `SELECT DISTINCT ${dateField}`;
-      break;
-    case 'DATETIME':
-      selectQ = `SELECT DISTINCT DATE(${dateField}) AS ${dateField}`;
-      break;
-  }
+function buildLookbackQuery(path) {
   return `
-    ${selectQ}
+    SELECT DISTINCT(${FILE_ID_COLUMN})
     FROM \`${path}\`
-    ORDER BY ${dateField} DESC
-    LIMIT ${numDays}
   `;
 }
 
@@ -110,7 +94,10 @@ function buildValidBQName(name) {
   return name.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
 }
 
+const FILE_ID_COLUMN = buildValidBQName('File ID');
+
 module.exports = {
+  FILE_ID_COLUMN,
   buildLookbackQuery,
   buildSchema,
   buildValidBQName,

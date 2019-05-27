@@ -19,34 +19,26 @@
 const split = require('split2');
 const util = require('util');
 const {BigQuery} = require('@google-cloud/bigquery');
-const {DateTime} = require('luxon');
 const {pipeline: pipeline_} = require('stream');
 
 const pipeline = util.promisify(pipeline_);
 
-const {createKey, deleteKey, getProjectId} = require('./auth.js');
-const {buildLookbackQuery, buildValidBQName} = require('./bq.js');
+const {
+  FILE_ID_COLUMN,
+  buildLookbackQuery,
+  buildValidBQName,
+} = require('./bq.js');
 const {
   decodePayload,
+  getProjectId,
   error,
-  getLookbackDates,
   info,
   log,
-  sleep,
   warn,
 } = require('./helpers.js');
 const packageSpec = require('./package.json');
 
-// Constants
-const IAM_SLEEP_MS = 1000;
-
-const DEFAULT_LOOKBACK_DAYS = 7;
-const DEFAULT_DATE_FIELD = 'Date';
-const DEFAULT_DATE_TYPE = 'DATE';
-
-const BQ_DATE_FORMAT = 'yyyy-MM-dd';
-
-const NULL_VALUE = '(not set)';
+const SUPPORTED_PRODUCTS = new Set(['CM', 'DV']);
 
 async function argon(req, res) {
   info(`Connector version: ${packageSpec.version}`);
@@ -61,19 +53,15 @@ async function argon(req, res) {
     return res.status(200).json({success: true, message: msg});
   }
 
-  // required for cleanup
-  let emailId;
-  let keyId;
-
   try {
     const payload = decodePayload(req.body);
-    if (!payload) {
+    if (!payload || Object.keys(payload).length == 0) {
       throw Error('Provide a POST body.');
     }
 
     const product = payload.product;
     info(`Product: ${product}`);
-    if (!product) {
+    if (!product || !SUPPORTED_PRODUCTS.has(product)) {
       throw Error('Provide Marketing Platform product - DV or CM.');
     }
     const {
@@ -101,41 +89,14 @@ async function argon(req, res) {
       throw Error('Provide User Profile ID.');
     }
 
-    const lookbackDays = payload.lookbackDays || DEFAULT_LOOKBACK_DAYS;
-    info(`Lookback Days: ${lookbackDays}`);
-
-    const cleanDateField = payload.dateField || DEFAULT_DATE_FIELD;
-    info(`Date Field: ${cleanDateField}`);
-    const dateField = buildValidBQName(cleanDateField);
-
-    const dateType = payload.dateType || DEFAULT_DATE_TYPE;
-    info(`Date Type: ${dateType}`);
-
-    emailId = payload.emailId;
-    info(`Email Address: ${emailId}`);
-
     let projectId = payload.projectId;
     if (!projectId) {
       projectId = await getProjectId();
     }
     info(`Project ID: ${projectId}`);
 
-    let credentials;
-    if (!emailId) {
-      info('Using environment credentials.');
-      credentials = null;
-      keyId = null;
-    } else {
-      info(`Creating IAM key credentials.`);
-      credentials = await createKey(emailId);
-      keyId = credentials.private_key_id;
-
-      info(`Waiting for key to be active on GCP.`);
-      await sleep(IAM_SLEEP_MS);
-    }
-
     info('Initializing the API client.');
-    const client = await getClient(credentials);
+    const client = await getClient();
 
     info(`Checking for existence of Report ${reportId}.`);
     const reportName = await getReportName({client, profileId, reportId});
@@ -145,7 +106,7 @@ async function argon(req, res) {
     info(`Report Name: ${reportName}`);
 
     info('Initializing the BigQuery client.');
-    const bq = await new BigQuery({projectId, credentials});
+    const bq = await new BigQuery({projectId});
 
     info(`Checking for existence of Dataset ${datasetName}.`);
     const dataset = bq.dataset(datasetName);
@@ -170,54 +131,34 @@ async function argon(req, res) {
       tableSchema = null;
     }
 
-    info('Calculating lookback days.');
-    const today = DateTime.utc();
-    const lookbackDates = getLookbackDates(today, lookbackDays, BQ_DATE_FORMAT);
-    info(`Lookback dates: ${[...lookbackDates]}`);
-
-    info('Checking ingested dates.');
-    const ingestedDates = new Set();
+    info('Checking ingested files.');
+    const ingestedIds = new Set();
     if (tableExists) {
       const path = `${projectId}.${datasetName}.${tableName}`;
-      const query = buildLookbackQuery(path, dateField, dateType, lookbackDays);
+      const query = buildLookbackQuery(path);
       const [rows] = await bq.query(query);
-      rows.forEach((row) => ingestedDates.add(row[dateField].value));
+      rows.forEach((row) => ingestedIds.add(row[FILE_ID_COLUMN]));
     }
 
-    info(`Ingested dates: ${[...ingestedDates]}`);
-
-    info('Calculating required dates.');
-    const requiredDates = new Set();
-    for (const date of lookbackDates.values()) {
-      if (!ingestedDates.has(date)) {
-        requiredDates.add(date);
-      }
-    }
-
-    info(`Required dates: ${[...requiredDates]}`);
-    if (requiredDates.length === 0) {
-      return resolve('No dates left to ingest.');
-    }
+    info(`Ingested files: ${[...ingestedIds]}`);
 
     info('Enumerating report files.');
     const reports = await getReports({
       client,
       profileId,
       reportId,
-      requiredDates,
-      lookbackDays,
-      dateFormat: BQ_DATE_FORMAT,
+      ingestedIds,
     });
 
-    warn(`Unresolved dates: ${[...requiredDates]}`);
-
-    if (Object.entries(reports).length === 0) {
+    if (reports.size === 0) {
       return resolve('No reports to ingest.');
+    } else {
+      info(`Fetching files: ${[...reports.keys()]}`);
     }
 
     info('Ingesting reports.');
-    for (const [date, {url, file}] of Object.entries(reports)) {
-      info(`Fetching report file ${file} for ${date}.`);
+    for (const [fileId, url] of reports.entries()) {
+      info(`Fetching report file ${fileId}.`);
       try {
         const fileOpts = {responseType: 'stream'};
         const {data: file} = await client.request({url, ...fileOpts});
@@ -230,13 +171,12 @@ async function argon(req, res) {
         const bqOpts = {
           sourceFormat: 'CSV',
           fieldDelimiter: ',',
-          nullMarker: NULL_VALUE,
+          nullMarker: '(not set)',
         };
         const extractCSV = new CSVExtractor({
           table,
           tableSchema,
-          dateField,
-          dateType,
+          fileId,
         });
         try {
           await pipeline(
@@ -259,16 +199,6 @@ async function argon(req, res) {
     return resolve('Reports ingested.');
   } catch (err) {
     return reject(err);
-  } finally {
-    if (emailId && keyId) {
-      // cleanup generated credentials
-      try {
-        info(`Deleting used IAM key ${keyId}.`);
-        await deleteKey(emailId, keyId);
-      } catch (err) {
-        error(err);
-      }
-    }
   }
 }
 

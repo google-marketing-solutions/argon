@@ -17,6 +17,7 @@
 'use strict';
 
 const {Transform} = require('stream');
+const {GoogleAuth} = require('google-auth-library');
 
 const {buildSchema, compareSchema} = require('./bq.js');
 
@@ -40,6 +41,11 @@ function warn(msg) {
   console.log(`Warning: ${msg}`);
 }
 
+async function getProjectId() {
+  const auth = new GoogleAuth();
+  return auth.getProjectId();
+}
+
 /**
  * Sleeps for given milliseconds.
  *
@@ -48,23 +54,6 @@ function warn(msg) {
  */
 async function sleep(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
-}
-
-/**
- * Generates lookback dates relative to the provided one.
- *
- * @param {!DateTime} fromDate Starting date for lookback
- * @param {number} numDays Number of days to lookback
- * @param {string} dateFormat Format string for date
- * @return {!Set} Lookback date strings
- */
-function getLookbackDates(fromDate, numDays, dateFormat) {
-  const lookbackDates = new Set();
-  for (let days = 1; days <= numDays; ++days) {
-    const date = fromDate.minus({days}).toFormat(dateFormat);
-    lookbackDates.add(date);
-  }
-  return lookbackDates;
 }
 
 /**
@@ -93,17 +82,18 @@ class StreamLogger extends Transform {
 }
 
 class CSVExtractorBase extends Transform {
-  constructor({table, tableSchema, dateField, dateType}) {
+  constructor({table, tableSchema, fileId}) {
     super();
     this.table = table;
     this.tableSchema = tableSchema;
-    this.dateField = dateField;
-    this.dateType = dateType;
+    this.fileIdColumn = `,${fileId}`;
     this.counter = 0;
   }
 
   pushLine(chunk) {
     this.push(chunk);
+    // Insert file ID
+    this.push(this.fileIdColumn);
     this.push('\n');
     ++this.counter;
   }
@@ -117,7 +107,7 @@ class CSVExtractorBase extends Transform {
 
   async handleFields(names) {
     info('Report Schema:');
-    const reportSchema = buildSchema(names, this.dateField, this.dateType);
+    const reportSchema = buildSchema(names);
     log(reportSchema);
 
     if (this.tableSchema) {
@@ -152,7 +142,7 @@ class CSVExtractorBase extends Transform {
 module.exports = {
   decodePayload,
   error,
-  getLookbackDates,
+  getProjectId,
   info,
   log,
   sleep,
