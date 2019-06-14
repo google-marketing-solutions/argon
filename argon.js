@@ -95,6 +95,11 @@ async function argon(req, res) {
     }
     info(`Project ID: ${projectId}`);
 
+    const single = payload.single;
+    if (single) {
+      warn('Running in single file mode.');
+    }
+
     info('Initializing the API client.');
     const client = await getClient();
 
@@ -196,6 +201,11 @@ async function argon(req, res) {
         }
       } catch (err) {
         error(err);
+      }
+
+      if (single) {
+        warn('Terminating due to single file mode.');
+        break;
       }
     }
     return resolve('Reports ingested.');
