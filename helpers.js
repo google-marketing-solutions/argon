@@ -19,7 +19,7 @@
 const {Transform} = require('stream');
 const {GoogleAuth} = require('google-auth-library');
 
-const {buildSchema, compareSchema} = require('./bq.js');
+const {buildSchema, compareSchema, getNames} = require('./bq.js');
 
 function log(thing) {
   console.dir(thing, {
@@ -106,9 +106,9 @@ class CSVExtractorBase extends Transform {
   }
 
   async handleFields(names) {
-    info('Report Schema:');
+    info('Analysing report file.');
     const reportSchema = buildSchema(names);
-    log(reportSchema);
+    info(`Report file fields: ${getNames(reportSchema)}`);
 
     if (this.tableSchema) {
       return this.checkSchema(reportSchema).then(this.indicateProcessing);
@@ -124,9 +124,9 @@ class CSVExtractorBase extends Transform {
   async createTable(schema) {
     info('Creating BigQuery Table.');
     return this.table.create({schema}).then(([_, metadata]) => {
-      this.tableSchema = metadata.schema;
-      info('BigQuery Table Schema:');
-      log(this.tableSchema);
+      const tableSchema = metadata.schema;
+      this.tableSchema = tableSchema;
+      info(`BigQuery table fields: ${getNames(tableSchema)}`);
     });
   }
 

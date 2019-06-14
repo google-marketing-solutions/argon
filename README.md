@@ -48,7 +48,8 @@ Note: Argon does not support pre-existing reports, as they can cause
 hard-to-debug issues. Kindly create a new report as detailed below, and
 do not change the Dimension/Metrics/Events selections once Argon has
 started ingesting files. Always create a new Report, if you want to
-change the data or values you need.
+change the report template. Additionally, Argon will append an additional
+column - `file_id`, to keep track of ingested files.
 
 *   Choose the necessary report template in "Offline Reporting".
 *   Choose the "CSV" File type.

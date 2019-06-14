@@ -27,13 +27,13 @@ const {
   FILE_ID_COLUMN,
   buildLookbackQuery,
   buildValidBQName,
+  getNames,
 } = require('./bq.js');
 const {
   decodePayload,
   getProjectId,
   error,
   info,
-  log,
   warn,
 } = require('./helpers.js');
 const packageSpec = require('./package.json');
@@ -124,8 +124,7 @@ async function argon(req, res) {
       info('Fetching BQ table schema for verification.');
       const [metadata] = await table.getMetadata();
       tableSchema = metadata.schema;
-      info('Table Schema:');
-      log(tableSchema);
+      info(`BigQuery table fields: ${getNames(tableSchema)}`);
     } else {
       warn('Table does not already exist.');
       tableSchema = null;
@@ -137,29 +136,32 @@ async function argon(req, res) {
       const path = `${projectId}.${datasetName}.${tableName}`;
       const query = buildLookbackQuery(path);
       const [rows] = await bq.query(query);
-      rows.forEach((row) => ingestedIds.add(row[FILE_ID_COLUMN]));
+      rows.forEach((row) => ingestedIds.add(Number(row[FILE_ID_COLUMN])));
     }
 
     info(`Ingested files: ${[...ingestedIds]}`);
 
     info('Enumerating report files.');
-    const reports = await getReports({
-      client,
-      profileId,
-      reportId,
-      ingestedIds,
-    });
-
+    const reports = await getReports({client, profileId, reportId});
     if (reports.size === 0) {
-      return resolve('No reports to ingest.');
+      throw Error('No report files found.');
+    }
+
+    const pendingIds = [...reports.keys()]
+        .filter((fileId) => !ingestedIds.has(fileId))
+        .sort((a, b) => a - b);
+
+    if (pendingIds.length === 0) {
+      return resolve('No files to ingest.');
     } else {
-      info(`Fetching files: ${[...reports.keys()]}`);
+      info(`Pending files: ${pendingIds}`);
     }
 
     info('Ingesting reports.');
-    for (const [fileId, url] of reports.entries()) {
+    for (const fileId of pendingIds) {
       info(`Fetching report file ${fileId}.`);
       try {
+        const url = reports.get(fileId);
         const fileOpts = {responseType: 'stream'};
         const {data: file} = await client.request({url, ...fileOpts});
         if (!file) {

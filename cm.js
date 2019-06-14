@@ -43,7 +43,7 @@ async function getReportName({client, profileId, reportId}) {
   return response.data.name;
 }
 
-async function getReports({client, profileId, reportId, ingestedIds}) {
+async function getReports({client, profileId, reportId}) {
   const reports = new Map();
 
   let nextPageToken = '';
@@ -77,7 +77,7 @@ async function getReports({client, profileId, reportId, ingestedIds}) {
       // DCM API returns the final page infinitely
       // It contains the same items, but a new page token
       // So, track file ids and terminate when we see a repeat
-      const fileId = report.id;
+      const fileId = Number(report.id);
       if (seenFileIds.has(fileId)) {
         nextPageToken = '';
         break;
@@ -86,12 +86,10 @@ async function getReports({client, profileId, reportId, ingestedIds}) {
       }
 
       if (report.status === REPORT_AVAILABLE) {
-        if (!ingestedIds.has(fileId)) {
-          reports.set(fileId, report.urls.apiUrl);
-        }
+        reports.set(fileId, report.urls.apiUrl);
       }
     }
-  } while (nextPageToken !== '');
+  } while (nextPageToken);
 
   return reports;
 }

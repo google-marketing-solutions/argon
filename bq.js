@@ -81,6 +81,7 @@ function buildLookbackQuery(path) {
   return `
     SELECT DISTINCT(${FILE_ID_COLUMN})
     FROM \`${path}\`
+    ORDER BY ${FILE_ID_COLUMN} ASC
   `;
 }
 
@@ -96,10 +97,15 @@ function buildValidBQName(name) {
 
 const FILE_ID_COLUMN = buildValidBQName('File ID');
 
+function getNames(schema) {
+  return schema.fields.map((field) => field.name);
+}
+
 module.exports = {
   FILE_ID_COLUMN,
   buildLookbackQuery,
   buildSchema,
   buildValidBQName,
   compareSchema,
+  getNames,
 };

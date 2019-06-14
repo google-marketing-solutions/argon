@@ -68,10 +68,19 @@ async function getReportName({client, reportId}) {
       break;
     }
   }
-  return extractFilename(fileUrl);
+  if (!fileUrl) {
+    throw Error('No generated files found.');
+  }
+
+  const name = extractFilename(fileUrl);
+  if (!name) {
+    throw Error('Failed to parse filename.');
+  }
+
+  return name;
 }
 
-async function getReports({client, reportId, ingestedIds}) {
+async function getReports({client, reportId}) {
   const reports = new Map();
 
   const url = `${REPORTING_BASE_URL}/queries/${reportId}/reports`;
@@ -86,10 +95,10 @@ async function getReports({client, reportId, ingestedIds}) {
 
   for (const report of response.data.reports) {
     if (report.metadata.status.state === REPORT_AVAILABLE) {
-      const fileId = report.key.reportId;
-      if (!ingestedIds.has(fileId)) {
-        reports.set(fileId, report.metadata.googleCloudStoragePath);
-      }
+      reports.set(
+          Number(report.key.reportId),
+          report.metadata.googleCloudStoragePath
+      );
     }
   }
 
