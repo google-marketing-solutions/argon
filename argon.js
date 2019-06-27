@@ -30,6 +30,7 @@ const {
   getNames,
 } = require('./bq.js');
 const {
+  ascendingComparator,
   decodePayload,
   getProjectId,
   error,
@@ -100,6 +101,16 @@ async function argon(req, res) {
       warn('Running in single file mode.');
     }
 
+    const ignore = payload.ignore;
+    const ignoredIds = new Set();
+    if (ignore) {
+      ignore
+          .map((id) => Number(id))
+          .sort(ascendingComparator)
+          .forEach((id) => ignoredIds.add(id));
+      warn(`Ignoring files: ${[...ignoredIds]}`);
+    }
+
     info('Initializing the API client.');
     const client = await getClient();
 
@@ -153,8 +164,8 @@ async function argon(req, res) {
     }
 
     const pendingIds = [...reports.keys()]
-        .filter((fileId) => !ingestedIds.has(fileId))
-        .sort((a, b) => a - b);
+        .filter((id) => !ingestedIds.has(id) && !ignoredIds.has(id))
+        .sort(ascendingComparator);
 
     if (pendingIds.length === 0) {
       return resolve('No files to ingest.');

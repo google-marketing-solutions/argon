@@ -58,7 +58,9 @@ column - `file_id`, to keep track of ingested files.
     and use the "Link" option.
 *   If you want historical data to be backfilled for the first time,
     select the appropriate backfill Date Range with "Custom".
-*   Save and run the report.
+*   If this range is significant, break it up into much smaller chunks,
+    otherwise ingestion timeouts will result in partial uploads.
+*   Save and run the report, for each chunk, if necessary.
 *   Now, edit the report again, and select a Date Range of "Yesterday".
 *   Activate the Schedule for repeats "Daily" every "1 day" and choose a
     far-off in the future "Expiry" date.
@@ -74,16 +76,22 @@ column - `file_id`, to keep track of ingested files.
     *   Body:
         ```json5
         {
-            "product": "[PRODUCT]",           // required: CM or DV
+            "product": "[PRODUCT]",            // required: CM or DV
             "reportId": [REPORT_ID],
-            "profileId": [PROFILE_ID],        // only for CM
+            "profileId": [PROFILE_ID],         // only for CM
             "datasetName": "[DATASET_NAME]",
-            "projectId": "[BIGQUERY_PROJECT]" // default: current cloud project
+            "projectId": "[BIGQUERY_PROJECT]", // default: current cloud project
+            "single": [SINGLE_FILE_MODE],      // default: false
+            "ignore": [IGNORE_FILE_IDS]        // default: []
         }
         ```
     *   Notes:
         *   Use `projectId` if the output BigQuery dataset lives outside the
             currently deployed cloud project.
+        *   Set `single` to true, to process only one file per run. This is
+            useful if your reports are multiple GBs.
+        *   Set `ignore` to a list of File IDs, to skip wrongly generated
+            or unnecessary report files.
 *   Save the job and run once to ingest the initially generated
     backfill historical data file.
 *   If it fails, check the logs for error messages and ensure all the above

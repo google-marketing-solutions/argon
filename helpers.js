@@ -47,6 +47,17 @@ async function getProjectId() {
 }
 
 /**
+ * Ascending sort comparator function for numbers.
+ *
+ * @param {number} a
+ * @param {number} b
+ * @return {number} a - b
+ */
+function ascendingComparator(a, b) {
+  return a - b;
+}
+
+/**
  * Sleeps for given milliseconds.
  *
  * @param {number} milliseconds Milliseconds to sleep
@@ -140,6 +151,7 @@ class CSVExtractorBase extends Transform {
 }
 
 module.exports = {
+  ascendingComparator,
   decodePayload,
   error,
   getProjectId,
