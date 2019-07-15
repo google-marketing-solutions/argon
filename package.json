@@ -1,6 +1,6 @@
 {
   "name": "argon",
-  "version": "3.2.0",
+  "version": "3.2.1",
   "author": "Google Inc.",
   "license": "Apache-2.0",
   "description": "Google Marketing Platform Reporting to BigQuery connector",
@@ -24,7 +24,7 @@
     "@google-cloud/bigquery": "^3.0.0",
     "body-parser": "^1.19.0",
     "express": "^4.17.1",
-    "google-auth-library": "^4.2.0",
+    "google-auth-library": "^4.2.5",
     "split2": "^3.1.1"
   },
   "devDependencies": {
