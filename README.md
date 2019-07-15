@@ -71,7 +71,7 @@ column - `file_id`, to keep track of ingested files.
 *   Create a Scheduler Job with:
     *   Frequency: `0 */12 * * *` (repeating every 12 hours)
     *   Target: HTTP
-    *   URL: `https://[REGION]-[PROJECT].cloudfunctions.net/argon`
+    *   URL: Cloud Function URL
     *   HTTP Method: POST
     *   Body:
         ```json5
@@ -89,7 +89,7 @@ column - `file_id`, to keep track of ingested files.
         *   Use `projectId` if the output BigQuery dataset lives outside the
             currently deployed cloud project.
         *   Set `single` to true, to process only one file per run. This is
-            useful if your reports are multiple GBs.
+            useful if your reports are multiple GBs large.
         *   Set `ignore` to a list of File IDs, to skip wrongly generated
             or unnecessary report files.
 *   Save the job and run once to ingest the initially generated
