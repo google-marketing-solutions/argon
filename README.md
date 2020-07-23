@@ -6,7 +6,10 @@ This middleware automates the import of both Campaign Manager (CM) and
 Display & Video 360 (DV) Offline Reporting files into BigQuery. It can be
 deployed onto [Cloud Functions](https://cloud.google.com/functions/). You
 can trigger jobs by issuing POST calls with configured JSON, which allows
-for use with [Cloud Scheduler](https://cloud.google.com/scheduler/).
+for use with [Cloud Scheduler](https://cloud.google.com/scheduler/). Argon
+uploads all values as string type, and verifies the schema with the report
+files' columns, at runtime. It also appends a File ID column to track file
+ingestions.
 
 ## Setup
 
@@ -32,7 +35,7 @@ for use with [Cloud Scheduler](https://cloud.google.com/scheduler/).
 
 #### Accounts:
 
-*   Ensure that the CM / DV Account has the following Permissions:
+*   Ensure that the CM Account has the following Permissions:
     *   Properties > Enable account for API access
     *   Reporting  > View all generated reports
 *   Create a CM/ DV User Profile with the service account's email address
@@ -48,8 +51,8 @@ Note: Argon does not support pre-existing reports, as they can cause
 hard-to-debug issues. Kindly create a new report as detailed below, and
 do not change the Dimension/Metrics/Events selections once Argon has
 started ingesting files. Always create a new Report, if you want to
-change the report template. Additionally, Argon will append an additional
-column - `file_id`, to keep track of ingested files.
+change the report template. All columns are string type, abd Argon will
+append an additional column (`file_id`), to keep track of ingested files.
 
 *   Choose the necessary report template in "Offline Reporting".
 *   Choose the "CSV" File type.
@@ -89,8 +92,9 @@ column - `file_id`, to keep track of ingested files.
         *   Use `projectId` if the output BigQuery dataset lives outside the
             currently deployed cloud project.
         *   Set `single` to true, to process only one file per run. This is
-            useful if your reports are multiple GBs large.
-        *   Set `ignore` to a list of File IDs, to skip wrongly generated
+            useful if your reports are multiple GBs large, as Cloud Functions
+            will timeout in 540s.
+        *   Set `ignore` to a list of Report File IDs, to skip wrongly generated
             or unnecessary report files.
 *   Save the job and run once to ingest the initially generated
     backfill historical data file.
