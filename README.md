@@ -102,6 +102,15 @@ If you change the schema in Bigquery, Argon's schema check will fail.
 *   If it fails, check the logs for error messages and ensure all the above
     steps have been appropriately followed, with the correct permissions.
 *   Moving forward, Cloud Scheduler will trigger Argon for regular ingestion.
+* #### Cloud Scheduler with OIDC Token ####
+   *   Add the following roles in IAM to the service account that will run the 
+       Cloud Scheduler and call Argon:
+       *   Cloud Functions Invoker
+       *   Cloud Scheduler Job Runner
+   *   While setting up the Cloud Scheduler job click on `SHOW MORE`.
+   *   Select `Add OIDC token` under Auth header.
+   *   Set service account email address.
+   *   Paste the Argon Cloud Function URL under `Audience`.
 
 ## Development
 
