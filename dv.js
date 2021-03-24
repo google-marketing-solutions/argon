@@ -24,7 +24,7 @@ const REPORTING_SCOPES = [
   'https://www.googleapis.com/auth/doubleclickbidmanager',
 ];
 const REPORTING_BASE_URL =
-  'https://www.googleapis.com/doubleclickbidmanager/v1';
+  'https://www.googleapis.com/doubleclickbidmanager/v1.1';
 
 const REPORT_AVAILABLE = 'DONE';
 const GCS_URL_PATTERN = /(.*)\/(?<filename>.*)_(.*)_(.*)_(.*)_(.*)\.csv\?(.*)/;
