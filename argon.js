@@ -1,5 +1,5 @@
 /**
- * Copyright 2019 Google LLC
+ * Copyright 2021 Google LLC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@
 const split = require('split2');
 const util = require('util');
 const {BigQuery} = require('@google-cloud/bigquery');
+const {GoogleAuth} = require('google-auth-library');
 const {pipeline: pipeline_} = require('stream');
 
 const pipeline = util.promisify(pipeline_);
@@ -66,7 +67,7 @@ async function argon(req, res) {
       throw Error('Provide Marketing Platform product - DV or CM.');
     }
     const {
-      getClient,
+      REPORTING_SCOPES,
       getReportName,
       getReports,
       CSVExtractor,
@@ -112,7 +113,8 @@ async function argon(req, res) {
     }
 
     info('Initializing the API client.');
-    const client = await getClient();
+    const auth = new GoogleAuth({scopes: REPORTING_SCOPES});
+    const client = await auth.getClient();
 
     info(`Checking for existence of Report ${reportId}.`);
     const reportName = await getReportName({client, profileId, reportId});
@@ -201,10 +203,8 @@ async function argon(req, res) {
               file,
               split(),
               extractCSV,
-              table.createWriteStream(bqOpts)
+              table.createWriteStream(bqOpts),
           );
-        } catch (e) {
-          throw e;
         } finally {
           info(`Processed ${extractCSV.counter} lines.`);
           // pull in tableSchema from processed report

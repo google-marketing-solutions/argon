@@ -1,5 +1,5 @@
 /**
- * Copyright 2019 Google LLC
+ * Copyright 2021 Google LLC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,19 @@
 const {Transform} = require('stream');
 const {GoogleAuth} = require('google-auth-library');
 
-const {buildSchema, compareSchema, getNames} = require('./bq.js');
+const {
+  buildSchema,
+  compareSchema,
+  getNames,
+  transformSchema,
+} = require('./bq.js');
+
+// Product rebranded fields in March 2021
+// https://support.google.com/displayvideo/answer/10359125
+const NAME_PATTERNS = [
+  [/dbm/, 'dv360'],
+  [/d?cm/, 'cm360'],
+];
 
 function log(thing) {
   console.dir(thing, {
@@ -143,7 +155,21 @@ class CSVExtractorBase extends Transform {
 
   async checkSchema(schema) {
     info('Checking schemas for consistency.');
-    const schemaMatches = compareSchema(this.tableSchema, schema);
+    let schemaMatches = compareSchema(this.tableSchema, schema);
+    if (schemaMatches) {
+      return;
+    }
+
+    warn('Schema comparison failed. Attempting to rename old columns.');
+    const renamedSchema = transformSchema(this.tableSchema, NAME_PATTERNS);
+    if (renamedSchema) {
+      warn('Legacy columns detected in table schema.');
+      info(`Renamed fields: ${getNames(renamedSchema)}`);
+      schemaMatches = compareSchema(renamedSchema, schema);
+    } else {
+      warn('No columns can be renamed.');
+    }
+
     if (!schemaMatches) {
       this.emit('error', Error('Schema does not match.'));
     }

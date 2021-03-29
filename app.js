@@ -1,5 +1,5 @@
 /**
- * Copyright 2019 Google LLC
+ * Copyright 2021 Google LLC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,15 +17,14 @@
 'use strict';
 
 const express = require('express');
-const bodyParser = require('body-parser');
 const {argon} = require('./argon.js');
 
 const app = express();
 const port = process.env.PORT || 8080;
 const host = '0.0.0.0';
 
-app.use(bodyParser.json());
-app.use(bodyParser.raw());
+app.use(express.json());
+app.use(express.raw());
 
 app.post('/', async function(req, res, next) {
   try {

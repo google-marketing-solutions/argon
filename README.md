@@ -2,8 +2,8 @@
 
 **Please note: this is not an officially supported Google product.**
 
-This middleware automates the import of both Campaign Manager (CM) and
-Display & Video 360 (DV) Offline Reporting files into BigQuery. It can be
+This middleware automates the import of both Campaign Manager 360 (CM360) and
+Display & Video 360 (DV360) Offline Reporting files into BigQuery. It can be
 deployed onto [Cloud Functions](https://cloud.google.com/functions/). You
 can trigger jobs by issuing POST calls with configured JSON, which allows
 for use with [Cloud Scheduler](https://cloud.google.com/scheduler/). Argon
@@ -13,7 +13,7 @@ ingestions.
 
 ## Setup
 
-### Google Cloud Project:
+### Google Cloud Project
 
 *   Setup a Google Cloud project.
 *   Create a BigQuery dataset - tables will be created automatically per report.
@@ -31,9 +31,9 @@ ingestions.
         --service-account "[SERVICE_ACCOUNT_EMAIL]"
     ```
 
-### Google Marketing Platform:
+### Google Marketing Platform
 
-#### Accounts:
+#### Accounts
 
 *   Ensure that the CM Account has the following Permissions:
     *   Properties > Enable account for API access
@@ -45,7 +45,7 @@ ingestions.
         *   View all generated files
         *   View all saved reports
 
-#### Report:
+#### Report
 
 Note: Argon does not support pre-existing reports, as they can cause
 hard-to-debug issues. Kindly create a new report as detailed below, and
@@ -70,7 +70,7 @@ If you change the schema in Bigquery, Argon's schema check will fail.
     far-off in the future "Expiry" date.
 *   Save (and do not run) the report.
 
-### Google Cloud Scheduler:
+### Google Cloud Scheduler
 
 *   Create a Scheduler Job with:
     *   Frequency: `0 */12 * * *` (repeating every 12 hours)

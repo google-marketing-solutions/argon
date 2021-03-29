@@ -1,5 +1,5 @@
 /**
- * Copyright 2019 Google LLC
+ * Copyright 2021 Google LLC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,20 +16,13 @@
 
 'use strict';
 
-const {GoogleAuth} = require('google-auth-library');
-
 const {CSVExtractorBase} = require('./helpers.js');
 
 const REPORTING_SCOPES = ['https://www.googleapis.com/auth/dfareporting'];
-const REPORTING_BASE_URL = 'https://www.googleapis.com/dfareporting/v3.3';
+const REPORTING_BASE_URL = 'https://www.googleapis.com/dfareporting/v3.4';
 
 const REPORT_AVAILABLE = 'REPORT_AVAILABLE';
 const DCM_FIELDS_INDICATOR = 'Report Fields';
-
-async function getClient(credentials) {
-  const auth = new GoogleAuth();
-  return auth.getClient({scopes: REPORTING_SCOPES, credentials});
-}
 
 async function getReportName({client, profileId, reportId}) {
   const url =
@@ -125,7 +118,7 @@ class CSVExtractor extends CSVExtractorBase {
 }
 
 module.exports = {
-  getClient,
+  REPORTING_SCOPES,
   getReportName,
   getReports,
   CSVExtractor,

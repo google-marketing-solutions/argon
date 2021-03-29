@@ -1,5 +1,5 @@
 /**
- * Copyright 2019 Google LLC
+ * Copyright 2021 Google LLC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -72,6 +72,36 @@ function compareSchema(left, right) {
 }
 
 /**
+ * Transform column names in schema using regex.
+ *
+ * @param {!object} schema Schema to be transformed
+ * @param {!array} patternMap Tuples of old,new regex patterns
+ * @return {?object} New schema, if renamed, else null
+ */
+function transformSchema(schema, patternMap) {
+  const fields = schema.fields.slice();
+  let renamed = false;
+
+  for (const i in fields) {
+    const field = fields[i].name;
+    for (const [oldP, newP] of patternMap) {
+      if (oldP.test(field)) {
+        fields[i].name = field.replace(oldP, newP);
+        renamed = true;
+      }
+    }
+  }
+
+  if (renamed) {
+    // update schema with new fields
+    schema.fields = fields;
+    return schema;
+  } else {
+    return null;
+  }
+}
+
+/**
  * Builds a BigQuery query to lookback file IDs for a given path.
  *
  * @param {string} path BigQuery table path
@@ -79,10 +109,10 @@ function compareSchema(left, right) {
  */
 function buildLookbackQuery(path) {
   return `
-    SELECT DISTINCT(${FILE_ID_COLUMN})
-    FROM \`${path}\`
-    ORDER BY ${FILE_ID_COLUMN} ASC
-  `;
+     SELECT DISTINCT(${FILE_ID_COLUMN})
+     FROM \`${path}\`
+     ORDER BY ${FILE_ID_COLUMN} ASC
+   `;
 }
 
 /**
@@ -107,5 +137,6 @@ module.exports = {
   buildSchema,
   buildValidBQName,
   compareSchema,
+  transformSchema,
   getNames,
 };

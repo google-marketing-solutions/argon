@@ -1,5 +1,5 @@
 /**
- * Copyright 2019 Google LLC
+ * Copyright 2021 Google LLC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,15 +16,13 @@
 
 'use strict';
 
-const {GoogleAuth} = require('google-auth-library');
-
 const {CSVExtractorBase} = require('./helpers.js');
 
 const REPORTING_SCOPES = [
   'https://www.googleapis.com/auth/doubleclickbidmanager',
 ];
 const REPORTING_BASE_URL =
-  'https://www.googleapis.com/doubleclickbidmanager/v1';
+  'https://www.googleapis.com/doubleclickbidmanager/v1.1';
 
 const REPORT_AVAILABLE = 'DONE';
 const GCS_URL_PATTERN = /(.*)\/(?<filename>.*)_(.*)_(.*)_(.*)_(.*)\.csv\?(.*)/;
@@ -40,14 +38,6 @@ function extractFilename(url) {
     throw Error('Unable to extract filename from URL.');
   }
   return match.groups.filename;
-}
-
-async function getClient(credentials) {
-  const auth = new GoogleAuth();
-  return auth.getClient({
-    scopes: REPORTING_SCOPES,
-    credentials,
-  });
 }
 
 async function getReportName({client, reportId}) {
@@ -97,7 +87,7 @@ async function getReports({client, reportId}) {
     if (report.metadata.status.state === REPORT_AVAILABLE) {
       reports.set(
           Number(report.key.reportId),
-          report.metadata.googleCloudStoragePath
+          report.metadata.googleCloudStoragePath,
       );
     }
   }
@@ -135,7 +125,7 @@ class CSVExtractor extends CSVExtractorBase {
 }
 
 module.exports = {
-  getClient,
+  REPORTING_SCOPES,
   getReportName,
   getReports,
   CSVExtractor,
