@@ -1,0 +1,14 @@
+# git
+.git
+.gitignore
+
+# nodejs
+node_modules/
+package-lock.json
+
+# dev
+.eslintrc.json
+
+# sensitive
+*.json
+!package.json
