@@ -21,6 +21,7 @@ const util = require('util');
 const {BigQuery} = require('@google-cloud/bigquery');
 const {GoogleAuth} = require('google-auth-library');
 const {pipeline: pipeline_} = require('stream');
+const got = require('got');
 
 const pipeline = util.promisify(pipeline_);
 
@@ -115,6 +116,7 @@ async function argon(req, res) {
     info('Initializing the API client.');
     const auth = new GoogleAuth({scopes: REPORTING_SCOPES});
     const client = await auth.getClient();
+    const headers = await client.getRequestHeaders();
 
     info(`Checking for existence of Report ${reportId}.`);
     const reportName = await getReportName({client, profileId, reportId});
@@ -180,8 +182,7 @@ async function argon(req, res) {
       info(`Fetching report file ${fileId}.`);
       try {
         const url = reports.get(fileId);
-        const fileOpts = {responseType: 'stream'};
-        const {data: file} = await client.request({url, ...fileOpts});
+        const file = got.stream(url, {headers});
         if (!file) {
           warn('Report file not found.');
           continue;

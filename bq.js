@@ -72,6 +72,16 @@ function compareSchema(left, right) {
 }
 
 /**
+ * Deep copies a JSON-encodable object.
+ *
+ * @param {!object} obj JSON encodable object
+ * @return {!object} Deep copy of original
+ */
+function deepCopy(obj) {
+  return JSON.parse(JSON.stringify(obj));
+}
+
+/**
  * Transform column names in schema using regex.
  *
  * @param {!object} schema Schema to be transformed
@@ -79,7 +89,7 @@ function compareSchema(left, right) {
  * @return {?object} New schema, if renamed, else null
  */
 function transformSchema(schema, patternMap) {
-  const fields = schema.fields.slice();
+  const fields = deepCopy(schema.fields);
   let renamed = false;
 
   for (const i in fields) {
@@ -93,9 +103,7 @@ function transformSchema(schema, patternMap) {
   }
 
   if (renamed) {
-    // update schema with new fields
-    schema.fields = fields;
-    return schema;
+    return {fields};
   } else {
     return null;
   }
