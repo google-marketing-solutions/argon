@@ -19,7 +19,7 @@
 const {CSVExtractorBase} = require('./helpers.js');
 
 const REPORTING_SCOPES = ['https://www.googleapis.com/auth/dfareporting'];
-const REPORTING_BASE_URL = 'https://www.googleapis.com/dfareporting/v3.4';
+const REPORTING_BASE_URL = 'https://www.googleapis.com/dfareporting/v3.5';
 
 const REPORT_AVAILABLE = 'REPORT_AVAILABLE';
 const DCM_FIELDS_INDICATOR = 'Report Fields';

@@ -1,6 +1,6 @@
 {
   "name": "argon",
-  "version": "3.3.1",
+  "version": "3.4.0",
   "author": "Google Inc.",
   "license": "Apache-2.0",
   "description": "Google Marketing Platform Reporting to BigQuery connector",
@@ -9,7 +9,7 @@
     "type": "git",
     "url": "https://github.com/google/argon.git"
   },
-  "main": "argon.js",
+  "main": "index.js",
   "engines": {
     "node": ">=10",
     "npm": ">=6"
@@ -21,17 +21,17 @@
     "test": "echo 'Error: No tests defined' && exit 1"
   },
   "dependencies": {
-    "@google-cloud/bigquery": "^5.6.0",
+    "@google-cloud/bigquery": "^5.9.1",
     "express": "^4.17.1",
-    "google-auth-library": "^7.0.3",
+    "google-auth-library": "^7.10.1",
     "got": "^11.8.2",
     "split2": "^3.2.2"
   },
   "devDependencies": {
-    "eslint": "^7.25.0",
+    "eslint": "^7.32.0",
     "eslint-config-google": "^0.14.0",
-    "nodemon": "^2.0.7",
-    "prettier": "^2.2.1",
+    "nodemon": "^2.0.14",
+    "prettier": "^2.4.1",
     "prettier-eslint": "^12.0.0",
     "prettier-eslint-cli": "^5.0.1"
   }
