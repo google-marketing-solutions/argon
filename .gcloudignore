@@ -1,13 +1,7 @@
+#!include:.gitignore
+
 # git
-.git
+.git/
 
-# nodejs
-node_modules/
-yarn.lock
-
-# sensitive
-*.json
-!package.json
-
-# temp
-.DS_Store
+# GitHub
+.github/

@@ -1,10 +1,18 @@
+# sensitive
+# Eg: Service Account keyfiles
+*.json
+
 # nodejs
 node_modules/
-yarn.lock
-
-# sensitive
-*.json
 !package.json
+!package-lock.json
+!tsconfig.json
 
-# temp
+# misc
+*~
 .DS_Store
+.vscode/
+
+# artifacts
+dist/
+tsconfig.tsbuildinfo
