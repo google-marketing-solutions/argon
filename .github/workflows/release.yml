@@ -28,12 +28,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout source code
-        # actions/checkout@v2.4.0
-        uses: actions/checkout@ec3a7ce113134d7a93b817d10a8272cb61118579
+        # actions/checkout@v3.0.2
+        uses: actions/checkout@2541b1294d2704b0964813337f33b291d3f8596b
 
       - name: Choose NodeJS version
-        # actions/setup-node@v2.5.1
-        uses: actions/setup-node@1f8c6b94b26d0feae1e387ca63ccbdc44d27b561
+        # actions/setup-node@v3.4.1
+        uses: actions/setup-node@2fddd8803e2f5c9604345a0b591c3020ee971a93
         with:
           node-version: 16
 
@@ -53,12 +53,12 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Buildpacks Pack
-        # buildpacks/github-actions/setup-pack@v4.5.1
-        uses: buildpacks/github-actions/setup-pack@0b5cd009ad32942e90a3f9aef30c0a55cc9f4aed
+        # buildpacks/github-actions/setup-pack@v4.8.0
+        uses: buildpacks/github-actions/setup-pack@b3b424d8030cefa4b1212732a44f289422a110c0
 
       - name: Log in to the Container registry
-        # docker/login-action@v1.12.0
-        uses: docker/login-action@42d299face0c5c43a0487c477f595ac9cf22f1a7
+        # docker/login-action@v2.0.0
+        uses: docker/login-action@49ed152c8eca782a232dede0303416e8f356c37b
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.repository_owner }}
