@@ -119,29 +119,34 @@ export const argon: HttpFunction = async (req, res) => {
     const tableName = buildValidBQName(reportName);
     info(`Checking for existence of Table ${tableName}.`);
     const table = dataset.table(tableName);
-    const [tableExists] = await table.exists();
-    let tableSchema;
+    let [tableExists] = await table.exists();
+    let tableSchema = null;
     if (tableExists) {
-      info('Fetching BQ table schema for verification.');
-      const [metadata] = await table.getMetadata();
-      tableSchema = metadata.schema;
-      info(`BigQuery table fields: ${getNames(tableSchema)}`);
+      if (opts.replace) {
+        warn('Deleting existing Table for replacement.');
+        await table.delete();
+        tableExists = false;
+      } else {
+        info('Fetching existing Table Schema for verification.');
+        const [metadata] = await table.getMetadata();
+        tableSchema = metadata.schema;
+        info(`BigQuery Table fields: ${getNames(tableSchema)}`);
+      }
     } else {
-      tableSchema = null;
-      warn('Table does not already exist.');
+      info('Table does not exist.');
     }
 
-    info('Checking ingested files.');
     const ignoredIds = new Set(opts.ignore);
     const ingestedIds = new Set<number>();
     if (tableExists) {
+      info('Checking ingested files in BigQuery.');
       const path = `${opts.projectId}.${opts.datasetName}.${tableName}`;
       const query = buildLookbackQuery(path);
       const [rows] = await bq.query(query);
       rows.forEach(row => ingestedIds.add(Number(row[FILE_ID_COLUMN])));
     }
 
-    info('Enumerating report files.');
+    info('Fetching report files from API.');
     const reports = await reportFetcher.getReports();
     if (reports.size === 0) {
       throw Error('No report files found.');

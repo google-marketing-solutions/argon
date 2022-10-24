@@ -139,6 +139,7 @@ If you change the schema in Bigquery, Argon's schema check will fail.
       "projectId": "[BIGQUERY_PROJECT]", // default: current cloud project
       "single": [SINGLE_FILE_MODE], // default: true
       "ignore": [IGNORE_FILE_IDS], // default: []
+      "replace": [REPLACE_TABLE_MODE], // default: false, append only
       "email": "[EMAIL_ADDRESS]" // default: no impersonation
     }
     ```
@@ -154,6 +155,9 @@ If you change the schema in Bigquery, Argon's schema check will fail.
 
   - Set `ignore` to a list of Report File IDs, to skip wrongly generated
     or unnecessary report files.
+
+  - Set `replace` to true, to replace the BigQuery table on running,
+    instead of appending to it.
 
   - Set `email` to a Service Account email address, to impersonate it
     for local development or testing purposes.
@@ -275,7 +279,7 @@ npm run format
 
 #### Docker
 
-Argon can be containerised using [Pack](https://buildpacks.io/docs/tools/pack).
+Argon can be containerized using [Pack](https://buildpacks.io/docs/tools/pack).
 
 ```sh
 # Build & Run a Docker image, from your local source

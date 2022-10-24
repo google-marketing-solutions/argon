@@ -119,7 +119,10 @@ function isSupportedProduct(product: string): product is SupportedProduct {
   return product === 'CM' || product === 'DV';
 }
 
-type DefaultArgonOpts = Pick<ArgonOpts, 'projectId' | 'single' | 'ignore'>;
+type DefaultArgonOpts = Pick<
+  ArgonOpts,
+  'projectId' | 'single' | 'ignore' | 'replace'
+>;
 
 /**
  * Get a partially filled ArgonOpts with sane defaults.
@@ -132,6 +135,7 @@ async function getDefaultArgonOpts(): Promise<DefaultArgonOpts> {
     projectId: await getProjectId(),
     single: true,
     ignore: [],
+    replace: false,
   };
 }
 
@@ -230,6 +234,16 @@ export async function parseBody(body: ParsedJSON): Promise<ArgonOpts> {
     warn(`Ignoring file IDs: ${[...ignore]}`);
   }
 
+  let replace: ArgonOpts['replace'] = defaults.replace;
+  if ('replace' in body) {
+    replace = Boolean(body.replace);
+  }
+  if (replace) {
+    warn('Insertion Mode: replace');
+  } else {
+    info('Insertion Mode: append');
+  }
+
   let email: ArgonOpts['email'];
   if (
     'email' in body &&
@@ -251,6 +265,7 @@ export async function parseBody(body: ParsedJSON): Promise<ArgonOpts> {
     projectId,
     single,
     ignore,
+    replace,
     email,
   };
 }

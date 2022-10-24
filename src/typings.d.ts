@@ -42,6 +42,7 @@ export interface ArgonOpts {
   projectId: string;
   single: boolean;
   ignore: number[];
+  replace: boolean;
   email: string | null;
 }
 
