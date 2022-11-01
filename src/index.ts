@@ -24,25 +24,26 @@ import {GoogleAuth, Impersonated} from 'google-auth-library';
 import got from 'got';
 import split from 'split2';
 
-import {CM_REPORTING_SCOPES, CMReportFetcher, CMCSVExtractor} from './cm';
-import {DV_REPORTING_SCOPES, DVReportFetcher, DVCSVExtractor} from './dv';
+import {version} from '../package.json';
 import {
-  FILE_ID_COLUMN,
   buildLookbackQuery,
   buildValidBQName,
+  FILE_ID_COLUMN,
   getNames,
 } from './bq';
+import {CMCSVExtractor, CMReportFetcher, CM_REPORTING_SCOPES} from './cm';
+import {DVCSVExtractor, DVReportFetcher, DV_REPORTING_SCOPES} from './dv';
 import {
   ascendingComparator,
   decodeBody,
-  parseBody,
+  descendingComparator,
   error,
   info,
+  parseBody,
   warn,
 } from './helpers';
 import {CSVExtractorBase} from './reports';
 import {ArgonOpts, GoogleAuthClient} from './typings';
-import {version} from '../package.json';
 
 export const argon: HttpFunction = async (req, res) => {
   info(`Connector version: ${version}`);
@@ -156,8 +157,8 @@ export const argon: HttpFunction = async (req, res) => {
     const pendingIds = [...reports.keys()]
       // remove ingested & ignored
       .filter(id => !ingestedIds.has(id) && !ignoredIds.has(id))
-      // sort by oldest first
-      .sort(ascendingComparator);
+      // sort by selected order
+      .sort(opts.newest ? descendingComparator : ascendingComparator);
 
     if (pendingIds.length === 0) {
       return resolve('No files to ingest.');

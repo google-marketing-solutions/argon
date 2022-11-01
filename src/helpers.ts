@@ -62,10 +62,21 @@ export class StreamLogger extends Transform {
  *
  * @param {number} a
  * @param {number} b
- * @return {number} a - b
+ * @return {number} 0 if a=b, +ve if a > b, -ve if a < b
  */
 export function ascendingComparator(a: number, b: number): number {
   return a - b;
+}
+
+/**
+ * Descending sort comparator function for numbers.
+ *
+ * @param {number} a
+ * @param {number} b
+ * @return {number} 0 if a=b, +ve if a < b, -ve if a > b
+ */
+export function descendingComparator(a: number, b: number): number {
+  return b - a;
 }
 
 /**
@@ -121,7 +132,7 @@ function isSupportedProduct(product: string): product is SupportedProduct {
 
 type DefaultArgonOpts = Pick<
   ArgonOpts,
-  'projectId' | 'single' | 'ignore' | 'replace'
+  'projectId' | 'single' | 'ignore' | 'newest' | 'replace'
 >;
 
 /**
@@ -135,6 +146,7 @@ async function getDefaultArgonOpts(): Promise<DefaultArgonOpts> {
     projectId: await getProjectId(),
     single: true,
     ignore: [],
+    newest: false,
     replace: false,
   };
 }
@@ -234,6 +246,16 @@ export async function parseBody(body: ParsedJSON): Promise<ArgonOpts> {
     warn(`Ignoring file IDs: ${[...ignore]}`);
   }
 
+  let newest: ArgonOpts['newest'] = defaults.newest;
+  if ('newest' in body) {
+    newest = Boolean(body.newest);
+  }
+  if (newest) {
+    info('Ordering Mode: newest');
+  } else {
+    info('Ordering Mode: oldest');
+  }
+
   let replace: ArgonOpts['replace'] = defaults.replace;
   if ('replace' in body) {
     replace = Boolean(body.replace);
@@ -265,6 +287,7 @@ export async function parseBody(body: ParsedJSON): Promise<ArgonOpts> {
     projectId,
     single,
     ignore,
+    newest,
     replace,
     email,
   };

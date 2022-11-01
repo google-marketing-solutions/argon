@@ -139,6 +139,7 @@ If you change the schema in Bigquery, Argon's schema check will fail.
       "projectId": "[BIGQUERY_PROJECT]", // default: current cloud project
       "single": [SINGLE_FILE_MODE], // default: true
       "ignore": [IGNORE_FILE_IDS], // default: []
+      "newest": [ORDERING_MODE], // default: false
       "replace": [REPLACE_TABLE_MODE], // default: false, append only
       "email": "[EMAIL_ADDRESS]" // default: no impersonation
     }
@@ -156,6 +157,9 @@ If you change the schema in Bigquery, Argon's schema check will fail.
   - Set `ignore` to a list of Report File IDs, to skip wrongly generated
     or unnecessary report files.
 
+  - Set `newest` to true, to order report files by most recent first,
+    instead of ordering by oldest first.
+
   - Set `replace` to true, to replace the BigQuery table on running,
     instead of appending to it.
 
@@ -164,7 +168,7 @@ If you change the schema in Bigquery, Argon's schema check will fail.
 
 - Save the job and run once to ingest any initially generated historical
   data files. Alternatively, you can run Argon on your local machine to
-  ingest larger files [[how-to](#ingest-large-data-files)].
+  ingest larger files [how-to](#ingest-large-report-files).
 
 - If it fails, check the logs for error messages and ensure all the above
   steps have been appropriately followed, with the correct permissions.
