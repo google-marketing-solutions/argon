@@ -1,5 +1,10 @@
 # Argon
 
+**DEPRECATED**: Offline Reports to BigQuery export is now integrated into product.
+You can read more about this in the documentation for [CM360](https://support.google.com/campaignmanager/answer/2823849) and [DV360](https://support.google.com/displayvideo/answer/6375151).
+
+---
+
 **Please note: this is not an officially supported Google product.**
 
 This middleware automates the import of both Campaign Manager 360 (CM360) and
@@ -11,8 +16,6 @@ supports Docker or Serverless Functions. You can trigger jobs by issuing
 POST calls with configured JSON, which allows for use with tools like
 [Cloud Scheduler](https://cloud.google.com/scheduler/). Argon always checks schemas,
 uploads all values as string type, and appends a File ID column to track ingestions.
-
-[![release](https://github.com/google/argon/actions/workflows/release.yml/badge.svg?branch=main&event=release)](https://github.com/google/argon/actions/workflows/release.yml)
 
 ## Setup
 
